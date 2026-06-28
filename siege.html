@@ -1,0 +1,2349 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>FARME SIEGE — Guerra dos Castelos</title>
+<meta name="siege-version" content="0.8">
+<!--
+═══════════════════════════════════════════════════════════════════
+  FARME SIEGE — Guerra dos Castelos · v0.6
+  🆕 v0.6: PONTE FARME — lê localStorage "farme_siege_bridge" (nome,
+  turma, aura, personagem 3D criado no painel do aluno e EGOs).
+  Avatar customizado (pele, cabelo, camisa, calça, acessório) visível
+  para todos no multiplayer. Cinto na cor da turma preserva os times.
+  Novidades: ⌨️ ESPAÇO = golpe / mouse SÓ gira a câmera (botão
+  direito neutralizado) · 🪵 3 bonecos de treino junto a CADA
+  castelo · 🔁 botão de trocar arma no celular · ✨ Cajado de Aura
+  (healer oficial: cura você e os companheiros próximos)
+  Módulo do ecossistema FARME AURA
+  Prof. Me. Christopher De Andrade Cardoso — https://inspira.prof/
+═══════════════════════════════════════════════════════════════════
+
+  ▶ SUPABASE (multiplayer + log de chat) — SQL no projeto:
+
+     create table if not exists siege_chat (
+       id bigint generated always as identity primary key,
+       created_at timestamptz default now(),
+       nome text not null,
+       turma text not null,
+       mensagem text not null,
+       pos_x real,
+       pos_z real
+     );
+     alter table siege_chat enable row level security;
+     create policy "siege_insert_anon" on siege_chat
+       for insert to anon with check (true);
+
+  Preencha SUPABASE_URL e SUPABASE_ANON_KEY no bloco CONFIG.
+
+  ▶ ENTRADA VIA FARME: siege.html?nome=Maria&turma=A&aura=4200
+  ▶ SEM SUPABASE: modo offline (mundo, armas, muralhas e bonecos).
+
+  ▶ COMO INVADIR: dane uma seção da muralha inimiga até 0 → ela
+     desaba e abre a brecha → entre, pegue a bandeira e volte vivo.
+     O 🔨 Martelo de Cerco é A arma anti-muralha (dano 40/golpe).
+
+  ▶ CONTROLES:
+     PC: WASD anda · ESPAÇO dá o golpe/atira (segure p/ repetir) ·
+         SHIFT pula · mouse: SEGURE o botão esquerdo e arraste só
+         para girar a câmera (clique não ataca; botão direito
+         desativado) · 1-7 troca arma · roda = zoom
+     Mobile: joystick (analógico) anda · 🔁 TROCAR arma ·
+         ⚔️ GOLPE/ATIRAR · 🦘 PULAR · arrastar a tela gira câmera
+     A MIRA central fica vermelha quando algo está no alcance.
+═══════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D0A1A; --panel:#171230ee; --panel2:#1F1840; --line:#2E2560;
+  --roxo:#7C5CFC; --roxo-claro:#A78BFA; --ouro:#F0B429;
+  --vermelho:#E5484D; --verde:#3DD68C; --texto:#E8E4FF; --dim:#9A92C9;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);
+  font-family:'Space Grotesk',sans-serif;color:var(--texto)}
+#game{position:fixed;inset:0}
+canvas{display:block;touch-action:none}
+
+/* ===== TELA DE ENTRADA ===== */
+#login{
+  position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 0%, rgba(124,92,252,.25), transparent),
+    radial-gradient(ellipse 50% 40% at 85% 100%, rgba(240,180,41,.14), transparent),
+    var(--bg);
+  padding:20px;
+}
+.login-card{
+  width:100%;max-width:400px;background:var(--panel);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:18px;padding:28px 26px;text-align:center;
+  max-height:94vh;overflow:auto;
+}
+.login-card .logo{font-family:'Silkscreen',cursive;font-size:26px;
+  background:linear-gradient(120deg,var(--roxo-claro),var(--roxo) 45%,var(--ouro));
+  -webkit-background-clip:text;background-clip:text;color:transparent;}
+.login-card .sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ouro);margin:4px 0 18px}
+.login-card label{display:block;text-align:left;font-size:12.5px;color:var(--dim);
+  margin:13px 0 5px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase}
+.login-card input{
+  width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
+  background:#0A0716;color:var(--texto);font-size:15px;font-family:inherit;outline:none;
+}
+.login-card input:focus{border-color:var(--roxo)}
+.turmas{display:flex;gap:10px;margin-top:4px}
+.turma-btn{
+  flex:1;padding:12px;border-radius:10px;border:2px solid var(--line);
+  background:#0A0716;color:var(--dim);font-size:15px;font-weight:700;cursor:pointer;
+  font-family:'Silkscreen',cursive;transition:.15s;
+}
+.turma-btn.a.sel{border-color:var(--roxo);color:var(--roxo-claro);background:rgba(124,92,252,.12)}
+.turma-btn.b.sel{border-color:var(--ouro);color:var(--ouro);background:rgba(240,180,41,.1)}
+#btnEntrar{
+  width:100%;margin-top:22px;padding:14px;border:none;border-radius:12px;cursor:pointer;
+  font-family:'Silkscreen',cursive;font-size:15px;color:#fff;
+  background:linear-gradient(120deg,var(--roxo),#5b3df0);
+  box-shadow:0 6px 22px rgba(124,92,252,.4);transition:.15s;
+}
+#btnEntrar:active{transform:scale(.97)}
+.offline-note{margin-top:14px;font-size:11.5px;color:var(--dim);line-height:1.5}
+.offline-note b{color:var(--ouro)}
+.login-footer{margin-top:16px;font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;line-height:1.6}
+.login-footer a{color:var(--roxo-claro);text-decoration:none}
+
+/* ===== HUD ===== */
+#hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none}
+.hud-top{
+  position:absolute;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;
+  display:flex;justify-content:space-between;align-items:flex-start;gap:8px;
+}
+.pill{
+  background:var(--panel);border:1px solid var(--line);border-radius:99px;
+  padding:6px 14px;font-size:12.5px;display:flex;align-items:center;gap:8px;
+  backdrop-filter:blur(6px);
+}
+.pill .nome{font-weight:700;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge-turma{font-family:'Silkscreen',cursive;font-size:11px;padding:2px 9px;border-radius:99px}
+.badge-turma.A{background:rgba(124,92,252,.25);color:var(--roxo-claro);border:1px solid var(--roxo)}
+.badge-turma.B{background:rgba(240,180,41,.2);color:var(--ouro);border:1px solid var(--ouro)}
+.badge-adm{font-family:'Silkscreen',cursive;font-size:10px;padding:2px 8px;border-radius:99px;
+  background:linear-gradient(120deg,#F0B429,#ffdf8a);color:#3a2c00;display:none}
+#online{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--verde)}
+#status-conn{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--dim)}
+
+/* mira central */
+#mira{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:26px;color:rgba(255,255,255,.55);font-weight:300;
+  text-shadow:0 0 4px rgba(0,0,0,.6);transition:color .08s;line-height:1;
+  font-family:'Space Grotesk',sans-serif;user-select:none;
+}
+#mira.alvo{color:var(--vermelho);text-shadow:0 0 8px rgba(229,72,77,.7)}
+#mira.acerto{color:var(--ouro);transform:translate(-50%,-50%) scale(1.5)}
+
+#placar{
+  position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:6px 18px;display:flex;align-items:center;gap:12px;backdrop-filter:blur(6px);
+  font-family:'Silkscreen',cursive;font-size:16px;
+}
+#placar .pa{color:var(--roxo-claro)} #placar .pb{color:var(--ouro)}
+#placar .vs{font-size:10px;color:var(--dim)}
+#avisoFlag{
+  position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 44px);left:50%;
+  transform:translateX(-50%);font-size:12px;color:#fff;display:none;
+  background:rgba(229,72,77,.85);border-radius:99px;padding:4px 14px;
+  font-family:'JetBrains Mono',monospace;white-space:nowrap;
+}
+#hpwrap{
+  position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 42px);left:10px;
+  width:190px;background:var(--panel);border:1px solid var(--line);
+  border-radius:99px;padding:5px 10px;backdrop-filter:blur(6px);
+}
+#hpwrap .hp-lab{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--dim);
+  display:flex;justify-content:space-between;margin-bottom:3px}
+#hpbar{height:9px;background:#0A0716;border-radius:99px;overflow:hidden}
+#hpfill{height:100%;width:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--verde),#a3e98c);transition:width .2s}
+
+#admbar{
+  position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 84px);left:50%;
+  transform:translateX(-50%);display:none;gap:6px;pointer-events:auto;flex-wrap:wrap;justify-content:center;
+}
+.adm-btn{
+  background:var(--panel);border:1px solid var(--ouro);color:var(--ouro);
+  border-radius:10px;padding:7px 11px;font-size:13px;cursor:pointer;
+  font-family:'JetBrains Mono',monospace;backdrop-filter:blur(6px);user-select:none;
+}
+.adm-btn.on{background:rgba(240,180,41,.25)}
+
+#feed{
+  position:absolute;left:10px;bottom:178px;width:min(280px,62vw);
+  display:flex;flex-direction:column;gap:5px;max-height:26vh;overflow:hidden;
+  justify-content:flex-end;
+}
+.feed-msg{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:6px 11px;font-size:12.5px;line-height:1.4;backdrop-filter:blur(6px);
+  animation:feedIn .2s ease;word-break:break-word;
+}
+.feed-msg b.A{color:var(--roxo-claro)} .feed-msg b.B{color:var(--ouro)}
+.feed-msg.evento{border-color:var(--ouro);color:var(--ouro);font-weight:600}
+@keyframes feedIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+#hotbar{
+  position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(max(14px,env(safe-area-inset-bottom)) + 58px);
+  display:flex;gap:6px;pointer-events:auto;
+}
+.slot{
+  width:46px;height:46px;border-radius:12px;border:2px solid var(--line);
+  background:var(--panel);backdrop-filter:blur(6px);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:19px;position:relative;user-select:none;
+}
+.slot .k{position:absolute;top:1px;left:5px;font-family:'JetBrains Mono',monospace;
+  font-size:8.5px;color:var(--dim)}
+.slot.sel{border-color:var(--ouro);background:rgba(240,180,41,.16)}
+.slot.lock{opacity:.32;filter:grayscale(1)}
+.slot .cad{position:absolute;bottom:1px;right:4px;font-size:9px}
+
+#chatbar{
+  position:absolute;left:50%;transform:translateX(-50%);
+  bottom:max(14px,env(safe-area-inset-bottom));
+  width:min(480px,92vw);display:flex;gap:8px;pointer-events:auto;
+}
+#chatInput{
+  flex:1;padding:11px 16px;border-radius:99px;border:1px solid var(--line);
+  background:var(--panel);backdrop-filter:blur(8px);color:var(--texto);
+  font-size:14px;font-family:inherit;outline:none;
+}
+#chatInput:focus{border-color:var(--roxo)}
+#btnEnviar{
+  padding:0 18px;border:none;border-radius:99px;cursor:pointer;
+  background:linear-gradient(120deg,var(--roxo),#5b3df0);color:#fff;
+  font-family:'Silkscreen',cursive;font-size:12px;
+}
+.hint{
+  position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(max(14px,env(safe-area-inset-bottom)) + 112px);
+  font-size:10.5px;color:var(--dim);font-family:'JetBrains Mono',monospace;
+  background:var(--panel);padding:3px 12px;border-radius:99px;border:1px solid var(--line);
+  white-space:nowrap;
+}
+
+#joy{
+  position:absolute;left:18px;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 64px);
+  width:110px;height:110px;border-radius:50%;
+  background:rgba(124,92,252,.08);border:2px solid rgba(124,92,252,.35);
+  pointer-events:auto;display:none;touch-action:none;z-index:12;
+}
+#joy-stick{
+  position:absolute;left:50%;top:50%;width:48px;height:48px;border-radius:50%;
+  background:rgba(167,139,250,.45);border:2px solid var(--roxo-claro);
+  transform:translate(-50%,-50%);
+}
+#acoes{
+  position:absolute;right:16px;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 64px);
+  display:none;flex-direction:column;gap:12px;pointer-events:auto;z-index:12;
+}
+.acao-btn{
+  width:74px;height:74px;border-radius:50%;border:2px solid var(--roxo-claro);
+  background:rgba(124,92,252,.22);color:#fff;font-size:26px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  user-select:none;touch-action:none;
+}
+.acao-btn small{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--dim)}
+#btnAtk{border-color:var(--vermelho);background:rgba(229,72,77,.22);width:84px;height:84px}
+@media (pointer:coarse){ #joy,#acoes{display:flex} .hint{display:none} }
+
+#morte{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  flex-direction:column;background:rgba(13,10,26,.55);backdrop-filter:blur(2px);
+}
+#morte .caveira{font-size:54px}
+#morte .titulo{font-family:'Silkscreen',cursive;font-size:22px;color:var(--vermelho);margin:8px 0}
+#morte .conta{font-family:'Silkscreen',cursive;font-size:40px;color:var(--ouro)}
+#morte .sub2{font-size:12px;color:var(--dim);margin-top:6px}
+
+#toast{
+  position:absolute;top:110px;left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--ouro);border-radius:12px;
+  padding:9px 18px;font-size:13px;display:none;backdrop-filter:blur(6px);
+  max-width:88vw;text-align:center;z-index:20;
+}
+#vitoria{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  flex-direction:column;background:rgba(13,10,26,.7);z-index:25;
+}
+#vitoria .tit{font-family:'Silkscreen',cursive;font-size:clamp(22px,6vw,44px);
+  background:linear-gradient(120deg,var(--roxo-claro),var(--ouro));
+  -webkit-background-clip:text;background-clip:text;color:transparent;text-align:center}
+#vitoria .sub{margin-top:10px;color:var(--dim);font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- ===== TELA DE ENTRADA ===== -->
+<div id="login">
+  <div class="login-card">
+    <div class="logo">⚔ FARME SIEGE</div>
+    <div class="sub">Guerra dos Castelos · v0.5</div>
+    <label>Seu nome</label>
+    <input id="inNome" maxlength="20" placeholder="Como aparecerá sobre o avatar" autocomplete="off">
+    <label>Sua turma</label>
+    <div class="turmas">
+      <button class="turma-btn a" data-t="A">TURMA A</button>
+      <button class="turma-btn b" data-t="B">TURMA B</button>
+    </div>
+    <label>Aura farmada (teste — virá do FARME)</label>
+    <input id="inAura" type="number" min="0" max="99999" value="0" inputmode="numeric">
+    <button id="btnEntrar">ENTRAR NA GUERRA</button>
+    <div class="offline-note" id="connNote"></div>
+    <div class="login-footer">
+      Módulo do ecossistema FARME AURA<br>
+      Prof. Me. Christopher De Andrade Cardoso — <a href="https://inspira.prof/">inspira.prof</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HUD ===== -->
+<div id="hud">
+  <div class="hud-top">
+    <div class="pill"><span class="nome" id="hudNome"></span><span class="badge-turma" id="hudTurma"></span><span class="badge-adm" id="hudAdm">👑 ADM</span></div>
+    <div class="pill"><span id="online">● 1 online</span><span id="status-conn"></span></div>
+  </div>
+  <div id="placar"><span class="pa">A 0</span><span class="vs">×</span><span class="pb">0 B</span></div>
+  <div id="avisoFlag">🚩 SUA BANDEIRA FOI ROUBADA!</div>
+  <div id="hpwrap">
+    <div class="hp-lab"><span id="hpTexto">100 / 100</span><span id="armaTexto">👊 Punho</span></div>
+    <div id="hpbar"><div id="hpfill"></div></div>
+  </div>
+  <div id="mira">+</div>
+  <div id="admbar">
+    <button class="adm-btn" data-a="tpA">🏰 A</button>
+    <button class="adm-btn" data-a="tpC">🎯 Centro</button>
+    <button class="adm-btn" data-a="tpB">🏰 B</button>
+    <button class="adm-btn" data-a="noclip">👻 Atravessar</button>
+    <button class="adm-btn" data-a="sprint">⚡ Correr</button>
+    <button class="adm-btn" data-a="muros">🧱 Restaurar muros</button>
+  </div>
+  <div id="feed"></div>
+  <div id="toast"></div>
+  <div id="hotbar"></div>
+  <div class="hint">WASD anda · ESPAÇO golpeia · SHIFT pula · segure o mouse p/ girar a câmera · 1-7 arma</div>
+  <div id="chatbar">
+    <input id="chatInput" maxlength="120" placeholder="Fale com quem está perto…" autocomplete="off">
+    <button id="btnEnviar">FALAR</button>
+  </div>
+  <div id="joy"><div id="joy-stick"></div></div>
+  <div id="acoes">
+    <div class="acao-btn" id="btnArma" style="width:60px;height:60px;font-size:20px">🔁<small>TROCAR</small></div>
+    <div class="acao-btn" id="btnPulo">🦘<small>PULAR</small></div>
+    <div class="acao-btn" id="btnAtk">⚔️<small>GOLPE</small></div>
+  </div>
+  <div id="morte">
+    <div class="caveira">💀</div>
+    <div class="titulo">VOCÊ CAIU EM BATALHA</div>
+    <div class="conta" id="contaMorte">20</div>
+    <div class="sub2">Renascendo no seu castelo…</div>
+  </div>
+  <div id="vitoria">
+    <div class="tit" id="vitTexto">🏆 TURMA A VENCEU!</div>
+    <div class="sub">Nova guerra começando em instantes…</div>
+  </div>
+</div>
+
+<div id="game"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ═══════════════════════════════════════════
+   CONFIG
+   ═══════════════════════════════════════════ */
+const SUPABASE_URL      = '';
+const SUPABASE_ANON_KEY = '';
+const CHAT_TABLE        = 'siege_chat';
+const SALA              = 'siege-mundo-1';
+
+const RAIO_CHAT    = 15;
+const TICK_POS_MS  = 100;
+const BUBBLE_MS    = 6000;
+const VEL          = 7.5;
+const RESPAWN_MS   = 20000;       // guerra oficial: 60000
+const CAPTURAS_VITORIA = 3;
+const FLAG_CHAO_MS = 30000;
+const MURO_HP      = 250;         // HP de cada seção da muralha (protótipo)
+
+const ADM_HASH  = 2655639089;     // hash do nome-código (nunca em texto)
+const ADM_NOME  = 'Chris';
+function djb2(s){ let h = 5381; for (const c of s) h = ((h*33) ^ c.charCodeAt(0)) >>> 0; return h; }
+
+const PALAVRAS_BLOQUEADAS = ['idiota','burro','burra','otario','otária','otaria','lixo','imbecil','merda','porra','caralho','puta','viado','desgraça','desgraca','fdp','vsf','krl','arrombado'];
+
+/* ═══════ ARSENAL (mapeado da aura do FARME) ═══════
+   danoMuro: dano contra seções de muralha — o 🔨 é A arma de cerco */
+const ARMAS = [
+  { id:0, nome:'Punho',            icone:'👊', tipo:'melee', dano:5,  danoMuro:2,  alcance:2.2, cd:420,  minAura:0,     cor:null },
+  { id:1, nome:'Espada de Treino', icone:'🗡️', tipo:'melee', dano:14, danoMuro:4,  alcance:2.7, cd:520,  minAura:1000,  cor:0xb8bfce },
+  { id:2, nome:'Arco Simples',     icone:'🏹', tipo:'arco',  dano:12, danoMuro:3,  alcance:0,   cd:950,  minAura:3000,  cor:0x8a5a2b },
+  { id:3, nome:'Espada de Aura',   icone:'⚔️', tipo:'melee', dano:20, danoMuro:6,  alcance:2.9, cd:560,  minAura:5000,  cor:0x7C5CFC },
+  { id:4, nome:'Martelo de Cerco', icone:'🔨', tipo:'melee', dano:10, danoMuro:40, alcance:2.9, cd:900,  minAura:6000,  cor:0x9c4f1e },
+  { id:5, nome:'Cajado de Aura',   icone:'✨', tipo:'cura',  cura:18, raio:7,      cd:1300, minAura:8000,  cor:0x3DD68C },
+  { id:6, nome:'Lâmina do Calvão', icone:'🌟', tipo:'melee', dano:26, danoMuro:8,  alcance:2.9, cd:520,  minAura:12000, cor:0xF0B429 },
+];
+
+/* ═══════ IDENTIDADE ═══════ */
+const qs = new URLSearchParams(location.search);
+let EU = {
+  id: 'p' + Math.random().toString(36).slice(2, 10),
+  nome: (qs.get('nome') || '').slice(0, 20),
+  turma: (qs.get('turma') || '').toUpperCase() === 'B' ? 'B' : (qs.get('turma') ? 'A' : ''),
+  aura: Math.max(0, parseInt(qs.get('aura') || '0') || 0),
+  adm: false,
+  hp: 100, maxHp: 100, morto: false,
+  arma: 0, carregando: '',
+};
+const COR_TURMA = { A: 0x7C5CFC, B: 0xF0B429 };
+const outraTurma = t => t === 'A' ? 'B' : 'A';
+
+/* ═══════ PONTE FARME AURA (Patch 9.14) ═══════
+   O painel do aluno grava localStorage 'farme_siege_bridge' (mesma origem).
+   URL ?nome=&aura= continua funcionando e tem prioridade quando presente. */
+let PONTE = null;
+try{ PONTE = JSON.parse(localStorage.getItem('farme_siege_bridge') || 'null'); }catch(e){}
+if (PONTE && PONTE.v >= 1){
+  if (!EU.nome) EU.nome = String(PONTE.nome || '').slice(0, 20);
+  if (!qs.get('aura')) EU.aura = Math.max(0, parseInt(PONTE.aura) || 0);
+  if (!EU.turma){
+    const tl = String(PONTE.turma || '').trim().toUpperCase();
+    if (/A$/.test(tl)) EU.turma = 'A'; else if (/B$/.test(tl)) EU.turma = 'B';
+  }
+  EU.char = PONTE.char || null;        // visual 3D criado no FARME
+  EU.egosFarme = PONTE.egos || [];     // EGOs transportados (efeitos de batalha: próxima fase)
+} else {
+  EU.char = null; EU.egosFarme = [];
+}
+/* ═══════ MODO EVENTO (Patch Siege v0.7) ═══════ */
+const EVT = {
+  dados: (PONTE && PONTE.siegeEvt) || null,   // {id, inicio, turmaA, turmaB, lado}
+  armas: (PONTE && PONTE.armas) || [],        // ids de ARMAS compradas na Loja de Guerra (máx 2)
+  fim: 0,            // timestamp do fim da batalha (setado pelo ADM)
+  encerrada: false
+};
+const eventoAtivo = () => !!EVT.dados && Date.now() < (EVT.dados.inicio + 90*60000);
+const batalhaRolando = () => EVT.fim > 0 && Date.now() < EVT.fim && !EVT.encerrada;
+if (PONTE && PONTE.adm === true) EU.adm = true;
+if (EVT.dados && EVT.dados.lado && !qs.get('turma')) EU.turma = EVT.dados.lado;
+
+/* ═══════ SUPABASE ═══════ */
+const ONLINE_MODE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+const sb = ONLINE_MODE ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+document.getElementById('connNote').innerHTML = ONLINE_MODE
+  ? 'Multiplayer <b>ativo</b>. Todas as conversas são registradas.'
+  : '<b>Modo offline:</b> Supabase não configurado — teste mundo, armas, muralhas e bonecos de treino.';
+
+/* ═══════ CENA ═══════ */
+const scene = new THREE.Scene();
+/* v0.7 — céu em gradiente (entardecer dourado no horizonte) */
+{
+  const cv = document.createElement('canvas'); cv.width = 2; cv.height = 256;
+  const cx = cv.getContext('2d');
+  const gr = cx.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#5e9be0'); gr.addColorStop(0.55, '#9cc4ee'); gr.addColorStop(1, '#ffe9c4');
+  cx.fillStyle = gr; cx.fillRect(0, 0, 2, 256);
+  const tx = new THREE.CanvasTexture(cv);
+  scene.background = tx;
+}
+scene.fog = new THREE.Fog(0xa8c9ec, 95, 235);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 450);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+document.getElementById('game').appendChild(renderer.domElement);
+
+const sol = new THREE.DirectionalLight(0xffe9bd, 1.35);
+sol.position.set(40, 70, 25);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+sol.shadow.camera.left = -110; sol.shadow.camera.right = 110;
+sol.shadow.camera.top = 110;  sol.shadow.camera.bottom = -110;
+scene.add(sol);
+scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x6f9c52, 0.85)); // céu azulado / grama refletida
+scene.add(new THREE.AmbientLight(0xfff2dd, 0.18));
+
+/* ═══════ MUNDO ═══════ */
+const MUNDO = { minX:-100, maxX:100, minZ:-60, maxZ:60 };
+const colisores = [];   // {x1,z1,x2,z2, ativo:true}
+const portoes   = [];
+const muros     = [];   // seções destrutíveis
+
+const matCache = {};
+function mat(cor){ return matCache[cor] ||= new THREE.MeshLambertMaterial({ color: cor }); }
+function bloco(x, y, z, sx, sy, sz, cor, sombra = true){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat(cor));
+  m.position.set(x, y, z);
+  m.castShadow = sombra; m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+function solido(x, z, sx, sz){
+  const c = { x1:x-sx/2, z1:z-sz/2, x2:x+sx/2, z2:z+sz/2, ativo:true };
+  colisores.push(c);
+  return c;
+}
+
+// chão
+{
+  const tons = [0x59a84f, 0x4f9a46, 0x63b258];
+  const geo = new THREE.BoxGeometry(4, 1, 4);
+  const pos = {};
+  for (let x = MUNDO.minX; x < MUNDO.maxX; x += 4)
+    for (let z = MUNDO.minZ; z < MUNDO.maxZ; z += 4){
+      if (Math.abs(x + 2) < 4) continue; // leito do rio — sem grama por cima
+      const t = tons[(Math.abs(x*7 + z*13) >> 2) % 3];
+      (pos[t] ||= []).push([x+2, -0.5, z+2]);
+    }
+  for (const t in pos){
+    const inst = new THREE.InstancedMesh(geo, mat(+t), pos[t].length);
+    const M = new THREE.Matrix4();
+    pos[t].forEach((p, i) => { M.setPosition(p[0], p[1], p[2]); inst.setMatrixAt(i, M); });
+    inst.receiveShadow = true;
+    scene.add(inst);
+  }
+}
+// rio + ponte — v0.8: LAGO CÊNICO ANIMADO
+let aguaSuperficie = null, aguaBrilho = null, regias = [];
+{
+  // leito e margens
+  bloco(0, -1.05, 0, 8.6, 0.3, 120, 0x2e4a3c, false);
+  for (const mx of [-4.15, 4.15]) bloco(mx, -0.45, 0, 0.5, 0.9, 120, 0x55684a, false);
+  // água em camadas
+  const profunda = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 120),
+    new THREE.MeshLambertMaterial({ color: 0x1d6fae, transparent: true, opacity: 0.92 }));
+  profunda.position.set(0, -0.78, 0); scene.add(profunda);
+  aguaSuperficie = new THREE.Mesh(new THREE.BoxGeometry(7.9, 0.1, 119.5),
+    new THREE.MeshLambertMaterial({ color: 0x56CCF2, transparent: true, opacity: 0.55 }));
+  aguaSuperficie.position.set(0, -0.42, 0); scene.add(aguaSuperficie);
+  aguaBrilho = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.05, 119),
+    new THREE.MeshBasicMaterial({ color: 0xcdeeff, transparent: true, opacity: 0.3 }));
+  aguaBrilho.position.set(-1.1, -0.36, 0); scene.add(aguaBrilho);
+  // espuma nas margens
+  for (const mx of [-3.8, 3.8]){
+    const esp = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.07, 119),
+      new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.55 }));
+    esp.position.set(mx, -0.38, 0); scene.add(esp);
+  }
+  // vitórias-régias (com flor) — longe da ponte
+  const rgn = (a,b)=>a+Math.random()*(b-a);
+  for (let i = 0; i < 10; i++){
+    const rz = (i < 5 ? -1 : 1) * rgn(10, 54), rx = rgn(-2.4, 2.4);
+    const vr = new THREE.Mesh(new THREE.CylinderGeometry(rgn(0.4,0.62), rgn(0.4,0.62), 0.06, 12),
+      new THREE.MeshLambertMaterial({ color: 0x3e8c3a }));
+    vr.position.set(rx, -0.36, rz); scene.add(vr); regias.push(vr);
+    if (i % 3 === 0){
+      const fl = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xff9ec4 }));
+      fl.position.set(rx, -0.26, rz); scene.add(fl); regias.push(fl);
+    }
+  }
+  // juncos nas margens + pedras emergindo
+  for (let i = 0; i < 8; i++){
+    const jx = (i % 2 ? -4.7 : 4.7), jz = (i < 4 ? -1 : 1) * rgn(12, 52);
+    for (let k = 0; k < 3; k++){
+      const h = rgn(0.8, 1.4);
+      const j = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, h, 5),
+        new THREE.MeshLambertMaterial({ color: 0x4a7c3f }));
+      j.position.set(jx + rgn(-0.3, 0.3), h/2, jz + rgn(-0.5, 0.5)); scene.add(j);
+      const tp = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.16, 3, 6),
+        new THREE.MeshLambertMaterial({ color: 0x6e4520 }));
+      tp.position.copy(j.position); tp.position.y = h + 0.08; scene.add(tp);
+    }
+  }
+  for (let i = 0; i < 5; i++){
+    const pd = new THREE.Mesh(new THREE.DodecahedronGeometry(rgn(0.4, 0.7), 0),
+      new THREE.MeshLambertMaterial({ color: 0x8d8d96 }));
+    pd.position.set(rgn(-2.5, 2.5), -0.3, (i < 3 ? -1 : 1) * rgn(14, 50));
+    pd.rotation.set(rgn(0,3), rgn(0,3), 0); pd.castShadow = true; scene.add(pd);
+  }
+  // animação da água (ondinhas + cintilação)
+  (function ondas(){
+    const t = performance.now();
+    if (aguaSuperficie) aguaSuperficie.position.y = -0.42 + Math.sin(t*0.0012)*0.045;
+    if (aguaBrilho){
+      aguaBrilho.material.opacity = 0.2 + 0.16*(0.5 + 0.5*Math.sin(t*0.0019));
+      aguaBrilho.position.x = -1.1 + Math.sin(t*0.0006)*1.4;
+    }
+    for (let i = 0; i < regias.length; i++)
+      regias[i].position.y = (regias[i].geometry.type==='SphereGeometry' ? -0.26 : -0.36) + Math.sin(t*0.0014 + i)*0.03;
+    requestAnimationFrame(ondas);
+  })();
+}
+solido(0, -33, 8, 54);
+solido(0,  33, 8, 54);
+bloco(0, 0.15, 0, 10, 0.3, 13, 0x8a5a2b);
+for (const px of [-5, 5]) for (const pz of [-6.2, 6.2])
+  bloco(px, 0.8, pz, 0.8, 1.2, 0.8, 0x6e4520);
+
+/* ═══════ BARREIRAS MÓVEIS (v0.8) — empurre p/ criar muros, 🔨 quebra ═══════ */
+const BARREIRAS = [];
+let _dicaEmpurrar = false;
+function criarBarreira(id, x, z, tipo){
+  const sB = tipo === 'pedra' ? 1.8 : 1.5;
+  const cor = tipo === 'pedra' ? 0x9a9aa8 : 0xa8743a;
+  const mesh = bloco(x, sB/2, z, sB, sB, sB, cor);
+  mesh.material = mesh.material.clone(); // material próprio p/ escurecer com dano
+  if (tipo === 'madeira'){ // friso de tábuas
+    for (const fy of [-sB*0.28, sB*0.28]){
+      const f = new THREE.Mesh(new THREE.BoxGeometry(sB+0.06, 0.12, sB+0.06), mat(0x6e4520));
+      f.position.y = fy; mesh.add(f);
+    }
+  } else { // rachaduras claras na pedra
+    const f = new THREE.Mesh(new THREE.BoxGeometry(sB+0.05, 0.1, sB+0.05), mat(0x7a7a8c));
+    mesh.add(f);
+  }
+  const col = solido(x, z, sB, sB);
+  const hp = tipo === 'pedra' ? 120 : 80;
+  const b = { id, mesh, col, s: sB, hp, max: hp, viva: true, tipo, x0: x, z0: z, lastTx: 0 };
+  BARREIRAS.push(b);
+  return b;
+}
+// distribuição: chokepoints da ponte + meio-campo dos dois lados
+[['b1',-3.2,10,'madeira'],['b2',3.2,10,'pedra'],['b3',-3.2,-10,'pedra'],['b4',3.2,-10,'madeira'],
+ ['b5',-14,18,'madeira'],['b6',14,18,'pedra'],['b7',-14,-18,'pedra'],['b8',14,-18,'madeira'],
+ ['b9',-26,2,'madeira'],['b10',26,-2,'madeira'],['b11',-9,32,'pedra'],['b12',9,-32,'pedra'],
+ ['b13',-20,-30,'madeira'],['b14',20,30,'madeira']
+].forEach(d => criarBarreira(d[0], d[1], d[2], d[3]));
+
+function barreiraEm(nx, nz, r = 0.55){
+  return BARREIRAS.find(b => b.viva && nx+r > b.col.x1 && nx-r < b.col.x2 && nz+r > b.col.z1 && nz-r < b.col.z2);
+}
+function moverBarreira(b, nx, nz){
+  b.mesh.position.x = nx; b.mesh.position.z = nz;
+  const h = b.s/2;
+  b.col.x1 = nx-h; b.col.x2 = nx+h; b.col.z1 = nz-h; b.col.z2 = nz+h;
+}
+function blocoLivre(b, nx, nz){
+  const h = b.s/2 + 0.04;
+  if (nx-h < MUNDO.minX+1 || nx+h > MUNDO.maxX-1 || nz-h < MUNDO.minZ+1 || nz+h > MUNDO.maxZ-1) return false;
+  for (const c of colisores){
+    if (c === b.col || !c.ativo) continue;
+    if (nx+h > c.x1 && nx-h < c.x2 && nz+h > c.z1 && nz-h < c.z2) return false;
+  }
+  for (const p2 of portoes)
+    if (nx+h > p2.x1 && nx-h < p2.x2 && nz+h > p2.z1 && nz-h < p2.z2) return false;
+  for (const o of outros.values()){
+    const p3 = o.grupo.position;
+    if (Math.abs(p3.x-nx) < h+0.5 && Math.abs(p3.z-nz) < h+0.5) return false;
+  }
+  return true;
+}
+function tentarEmpurrar(nx, nz, eixo){
+  const b = barreiraEm(eixo === 'x' ? nx : pos.x, eixo === 'z' ? nz : pos.z);
+  if (!b) return;
+  const passo = 0.09;
+  const dx = eixo === 'x' ? Math.sign(nx - pos.x) * passo : 0;
+  const dz = eixo === 'z' ? Math.sign(nz - pos.z) * passo : 0;
+  const tx = b.mesh.position.x + dx, tz = b.mesh.position.z + dz;
+  if (!blocoLivre(b, tx, tz)) return;
+  moverBarreira(b, tx, tz);
+  if (!_dicaEmpurrar){ _dicaEmpurrar = true; toast('📦 Você pode empurrar blocos e montar barreiras! 🔨 Martelo destrói.'); }
+  const ag = performance.now();
+  if (ag - b.lastTx > 150){ b.lastTx = ag; broadcast('bloco', { id: b.id, x: +tx.toFixed(2), z: +tz.toFixed(2) }); }
+}
+function danificarBarreira(b, dano){
+  if (!b || !b.viva) return;
+  b.hp -= dano;
+  popupDano(b.mesh.position.x, b.s + 0.8, b.mesh.position.z, '-' + dano, '#ffd28a');
+  b.mesh.material.color.multiplyScalar(0.93);
+  b.mesh.scale.setScalar(Math.max(0.78, 0.78 + 0.22 * (b.hp / b.max)));
+  if (b.hp <= 0) quebrarBarreira(b);
+}
+function quebrarBarreira(b){
+  if (!b.viva) return;
+  b.viva = false; b.col.ativo = false;
+  b.mesh.visible = false;
+  // estilhaços simples
+  for (let i = 0; i < 6; i++){
+    const e = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), b.mesh.material);
+    e.position.set(b.mesh.position.x + (Math.random()-0.5)*1.4, 0.4 + Math.random()*0.8, b.mesh.position.z + (Math.random()-0.5)*1.4);
+    e.rotation.set(Math.random()*3, Math.random()*3, 0);
+    scene.add(e);
+    setTimeout(() => scene.remove(e), 2600);
+  }
+}
+function restaurarBarreiras(){
+  for (const b of BARREIRAS){
+    b.viva = true; b.hp = b.max; b.col.ativo = true;
+    b.mesh.visible = true;
+    b.mesh.scale.setScalar(1);
+    b.mesh.material.color.set(b.tipo === 'pedra' ? 0x9a9aa8 : 0xa8743a);
+    moverBarreira(b, b.x0, b.z0);
+  }
+}
+
+/* ═══════ MURALHAS DESTRUTÍVEIS ═══════ */
+const PEDRA = 0x8e8e9e, PEDRA2 = 0x7a7a8c, PEDRA_ESC = 0x66667a;
+function criarMuro(turma, nomeSec, x, z, sx, sz){
+  const ALT = 6;
+  const mtl = new THREE.MeshLambertMaterial({ color: PEDRA });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, ALT, sz), mtl);
+  mesh.position.set(x, ALT/2, z);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+  const extras = [];
+  const eixo = sx > sz ? 'x' : 'z';
+  const comp = Math.max(sx, sz);
+  for (let d = -comp/2 + 2; d <= comp/2 - 2; d += 4){
+    const a = bloco(eixo === 'x' ? x + d : x, ALT + 0.6, eixo === 'x' ? z : z + d, 2.2, 1.2, 2.2, PEDRA_ESC);
+    extras.push(a);
+  }
+  const col = solido(x, z, sx, sz);
+  // barra de HP flutuante (aparece quando danificada)
+  const c = document.createElement('canvas'); c.width = 256; c.height = 48;
+  const ctx = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  const barra = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  barra.scale.set(6, 1.1, 1);
+  barra.position.set(x, 8.6, z);
+  barra.visible = false;
+  scene.add(barra);
+  const muro = {
+    idx: muros.length, turma, nomeSec, mesh, mtl, extras, col, barra, tex, ctx,
+    hp: MURO_HP, maxHp: MURO_HP, x, z, sx, sz, destruido: false, entulho: []
+  };
+  muros.push(muro);
+  return muro;
+}
+function redesenhaBarraMuro(m){
+  const ctx = m.ctx;
+  ctx.clearRect(0, 0, 256, 48);
+  ctx.fillStyle = 'rgba(13,10,26,0.8)';
+  ctx.beginPath(); ctx.roundRect(8, 8, 240, 32, 12); ctx.fill();
+  const f = Math.max(0, m.hp / m.maxHp);
+  ctx.fillStyle = f > 0.6 ? '#3DD68C' : (f > 0.3 ? '#F0B429' : '#E5484D');
+  if (f > 0){ ctx.beginPath(); ctx.roundRect(13, 13, 230 * f, 22, 8); ctx.fill(); }
+  m.tex.needsUpdate = true;
+}
+function aplicaDanoMuro(idx, dano, mostrarPopup = true){
+  const m = muros[idx];
+  if (!m || m.destruido) return;
+  m.hp = Math.max(0, m.hp - dano);
+  m.barra.visible = m.hp < m.maxHp;
+  redesenhaBarraMuro(m);
+  // estágios visuais
+  const f = m.hp / m.maxHp;
+  m.mtl.color.setHex(f > 0.6 ? PEDRA : (f > 0.3 ? 0x6f6f80 : 0x59474e));
+  if (mostrarPopup) popupDano(m.x, 6.6, m.z, '-' + dano, '#F0B429');
+  if (m.hp <= 0) destruirMuro(m);
+}
+function destruirMuro(m){
+  m.destruido = true;
+  m.col.ativo = false;
+  scene.remove(m.mesh);
+  m.extras.forEach(e => scene.remove(e));
+  m.barra.visible = false;
+  // entulho na brecha
+  for (let i = 0; i < 6; i++){
+    const e = bloco(m.x + rng(-m.sx/2.5, m.sx/2.5), 0.4, m.z + rng(-m.sz/2.5, m.sz/2.5),
+      rng(0.7,1.4), rng(0.5,0.9), rng(0.7,1.4), PEDRA_ESC);
+    m.entulho.push(e);
+  }
+  feed('💥', m.turma, `Muralha ${m.nomeSec} do Castelo ${m.turma} DESABOU! Brecha aberta!`, true);
+  toast(`💥 BRECHA no Castelo ${m.turma}!`);
+}
+function restaurarMuros(){
+  try{ restaurarBarreiras(); }catch(e){}
+  muros.forEach(m => {
+    if (m.destruido){
+      m.destruido = false;
+      m.col.ativo = true;
+      scene.add(m.mesh);
+      m.extras.forEach(e => scene.add(e));
+      m.entulho.forEach(e => scene.remove(e));
+      m.entulho = [];
+    }
+    m.hp = m.maxHp;
+    m.mtl.color.setHex(PEDRA);
+    m.barra.visible = false;
+  });
+}
+
+/* castelo: muralha quadrada (seções destrutíveis) + 4 torres + portão */
+function castelo(cx, turma, dir){
+  const cor = COR_TURMA[turma];
+  const H = 14, ALT = 6, ESP = 2;
+  const fx = cx + dir * H, bx = cx - dir * H;
+
+  // frente: 2 seções destrutíveis ao lado do portão
+  criarMuro(turma, 'frontal-norte', fx, -8.5, ESP, 11);
+  criarMuro(turma, 'frontal-sul',   fx,  8.5, ESP, 11);
+  bloco(fx, ALT + 0.9, 0, ESP + 0.4, 1.8, 8, PEDRA2);   // arco do portão (decorativo)
+  // traseira: 2 seções
+  criarMuro(turma, 'traseira-norte', bx, -7, ESP, 14);
+  criarMuro(turma, 'traseira-sul',   bx,  7, ESP, 14);
+  // laterais: 1 seção cada
+  criarMuro(turma, 'lateral-norte', cx, -H, 2*H - 6, ESP);
+  criarMuro(turma, 'lateral-sul',   cx,  H, 2*H - 6, ESP);
+
+  // 4 torres (indestrutíveis)
+  for (const tx of [cx - H, cx + H]) for (const tz of [-H, H]){
+    bloco(tx, 5.5, tz, 6, 11, 6, PEDRA2);
+    bloco(tx, 11.6, tz, 7, 1.2, 7, PEDRA);
+    bloco(tx, 12.8, tz, 4, 1.4, 4, PEDRA_ESC);
+    solido(tx, tz, 6, 6);
+  }
+  // portão
+  const fechadoY = 2.7, abertoY = 8.2;
+  const grade = new THREE.Group();
+  const matG = new THREE.MeshLambertMaterial({ color: 0x4a3622 });
+  const matO = new THREE.MeshLambertMaterial({ color: cor });
+  for (let i = -2; i <= 2; i++){
+    const barra = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5.4, 0.5), matG);
+    barra.position.set(0, 0, i * 1.2); barra.castShadow = true; grade.add(barra);
+  }
+  const trava = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 6), matO);
+  trava.position.y = 2.4; grade.add(trava);
+  const trava2 = trava.clone(); trava2.position.y = -2.4; grade.add(trava2);
+  grade.position.set(fx, fechadoY, 0);
+  scene.add(grade);
+  portoes.push({ x1: fx - ESP/2 - 0.4, z1: -3, x2: fx + ESP/2 + 0.4, z2: 3,
+                 turma, mesh: grade, fechadoY, abertoY, gx: fx, gz: 0 });
+  // fortaleza central
+  bloco(cx, 4, 0, 10, 8, 10, PEDRA);
+  bloco(cx, 8.6, 0, 11, 1.2, 11, PEDRA2);
+  solido(cx, 0, 10, 10);
+  bloco(cx, 11.5, 0, 4.5, 5, 4.5, PEDRA2);
+  const tapete = new THREE.Mesh(new THREE.BoxGeometry(2*H - 3, 0.06, 2*H - 3),
+    new THREE.MeshLambertMaterial({ color: cor, transparent: true, opacity: 0.18 }));
+  tapete.position.set(cx, 0.02, 0); scene.add(tapete);
+  return { pedX: cx + dir * 9, pedZ: 0 };
+}
+const baseA = castelo(-80, 'A', +1);
+const baseB = castelo(80, 'B', -1);
+
+// floresta / colina / pedras / nuvens
+function arvore(x, z){
+  /* v0.7 — árvore orgânica */
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.55, 3.2, 8), new THREE.MeshLambertMaterial({ color: 0x6e4520 }));
+  tr.position.set(x, 1.6, z); tr.castShadow = true; scene.add(tr);
+  const verdes = [0x3e7d36, 0x478c3d, 0x55a04a];
+  const copas = [[0,4.4,0,1.9],[ -1.0,3.7,0.5,1.25],[0.95,3.9,-0.45,1.15]];
+  for (let i = 0; i < 3; i++){
+    const c = copas[i];
+    const f = new THREE.Mesh(new THREE.SphereGeometry(c[3], 10, 8), new THREE.MeshLambertMaterial({ color: verdes[i] }));
+    f.position.set(x + c[0], c[1], z + c[2]); f.scale.y = 0.88; f.castShadow = true; scene.add(f);
+  }
+  solido(x, z, 1.4, 1.4);
+}
+const rng = (a,b)=>a+Math.random()*(b-a);
+for (let i = 0; i < 24; i++){
+  const x = rng(-58, 58), z = rng(34, 56);
+  if (Math.abs(x) < 8) continue;
+  arvore(Math.round(x), Math.round(z));
+}
+for (const [hx, hw] of [[-40, 26],[10, 30],[52, 20]]){
+  bloco(hx, 0.9, -48, hw, 1.8, 14, 0x59a84f);
+  bloco(hx, 2.1, -52, hw*0.6, 1.2, 8, 0x63b258);
+}
+
+/* v0.7 — nuvens fofas, pedras e flores */
+const mNuvem = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 });
+for (let i = 0; i < 7; i++){
+  const nv = new THREE.Group();
+  const base = rng(2.2, 4.2);
+  for (const [ox, oy, oz, r] of [[0,0,0,base],[base*0.8,0.25,0.4,base*0.7],[-base*0.75,0.15,-0.3,base*0.62]]){
+    const b = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 7), mNuvem);
+    b.position.set(ox, oy, oz); b.scale.y = 0.55; nv.add(b);
+  }
+  nv.position.set(rng(-95, 95), rng(26, 40), rng(-55, 55));
+  scene.add(nv);
+}
+const mPedra = new THREE.MeshLambertMaterial({ color: 0x8d8d96 });
+for (let i = 0; i < 12; i++){
+  const px = rng(-90, 90), pz = rng(-55, 55);
+  if (Math.abs(px) < 14 || Math.abs(px) > 80) continue;
+  const pd = new THREE.Mesh(new THREE.DodecahedronGeometry(rng(0.35, 0.85), 0), mPedra);
+  pd.position.set(px, 0.3, pz); pd.rotation.set(rng(0,3), rng(0,3), rng(0,3)); pd.castShadow = true;
+  scene.add(pd);
+}
+const coresFlor = [0xff6b9d, 0xF0B429, 0xffffff, 0x8b5cf6];
+for (let i = 0; i < 40; i++){
+  const fx = rng(-70, 70), fz = rng(-50, 50);
+  if (Math.abs(fx) < 10) continue;
+  const fl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5),
+    new THREE.MeshBasicMaterial({ color: coresFlor[i % 4] }));
+  fl.position.set(fx, 0.16, fz); scene.add(fl);
+}
+for (let i = 0; i < 12; i++){
+  const x = rng(-58,58), z = rng(-28,28);
+  if (Math.abs(x) < 7) continue;
+  bloco(Math.round(x), 0.5, Math.round(z), rng(.8,1.6), rng(.8,1.4), rng(.8,1.6), 0x9a9aa8);
+}
+for (let i = 0; i < 8; i++){
+  const c = new THREE.Mesh(new THREE.BoxGeometry(rng(8,16), 1.6, rng(5,9)),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }));
+  c.position.set(rng(-90,90), rng(26,38), rng(-50,50));
+  c.userData.nuvem = Math.random() * 0.4 + 0.2;
+  scene.add(c);
+}
+
+/* ═══════ BONECOS DE TREINO (locais, p/ testar armas) ═══════ */
+const bonecos = [];
+function criarBoneco(n, x, z){
+  const g = new THREE.Group();
+  const parte = (px,py,pz,sx,sy,sz,cor)=>{
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz), new THREE.MeshLambertMaterial({color:cor}));
+    m.position.set(px,py,pz); m.castShadow = true; g.add(m); return m;
+  };
+  parte(0, 0.6, 0, 0.45, 1.2, 0.45, 0x6e4520);        // poste
+  parte(0, 1.75, 0, 0.95, 1.15, 0.55, 0xC9A85C);      // corpo de palha
+  parte(0, 1.95, 0, 1.9, 0.26, 0.26, 0x8a5a2b);       // braços cruzados
+  parte(0, 2.7, 0, 0.72, 0.72, 0.72, 0xD9B97C);       // cabeça
+  const olho = new THREE.MeshBasicMaterial({ color: 0x3a2c1a });
+  for (const ox of [-0.16, 0.16]){
+    const o = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.05), olho);
+    o.position.set(ox, 2.75, 0.39); g.add(o);
+  }
+  // barra de vida
+  const c = document.createElement('canvas'); c.width = 256; c.height = 84;
+  const ctx = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  sp.scale.set(3.6, 1.2, 1); sp.position.y = 3.8;
+  g.add(sp);
+  g.position.set(x, 0, z);
+  scene.add(g);
+  solido(x, z, 1.0, 1.0);
+  const b = { nome: 'Treino ' + n, grupo: g, hp: 100, maxHp: 100, x, z,
+              morto: false, renasceEm: 0, ctx, tex };
+  redesenhaBoneco(b);
+  bonecos.push(b);
+}
+function redesenhaBoneco(b){
+  const x = b.ctx;
+  x.clearRect(0, 0, 256, 84);
+  x.fillStyle = 'rgba(13,10,26,0.75)';
+  x.beginPath(); x.roundRect(28, 4, 200, 40, 12); x.fill();
+  x.fillStyle = '#D9B97C'; x.font = '700 26px Space Grotesk, sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('🪵 ' + b.nome, 128, 25);
+  x.fillStyle = 'rgba(13,10,26,0.75)';
+  x.beginPath(); x.roundRect(48, 50, 160, 26, 12); x.fill();
+  const f = Math.max(0, b.hp / b.maxHp);
+  x.fillStyle = f > 0.45 ? '#3DD68C' : (f > 0.2 ? '#F0B429' : '#E5484D');
+  if (f > 0){ x.beginPath(); x.roundRect(53, 55, 150 * f, 16, 8); x.fill(); }
+  b.tex.needsUpdate = true;
+}
+function danoBoneco(b, dano){
+  if (b.morto) return;
+  b.hp = Math.max(0, b.hp - dano);
+  redesenhaBoneco(b);
+  popupDano(b.x, 3.2, b.z, '-' + dano, '#ff8a8d');
+  flashGrupo(b.grupo);
+  if (b.hp <= 0){
+    b.morto = true;
+    b.renasceEm = performance.now() + 4000;
+    b.grupo.rotation.x = Math.PI / 2.2;   // tomba
+    popupDano(b.x, 2, b.z, '💥', '#F0B429');
+  }
+}
+// área de treino: 3 bonecos junto a CADA castelo (em frente, fora da muralha)
+criarBoneco(1, -58, -12);
+criarBoneco(2, -54, -19);
+criarBoneco(3, -58, -26);
+criarBoneco(4,  58, -12);
+criarBoneco(5,  54, -19);
+criarBoneco(6,  58, -26);
+
+/* ═══════ POPUPS DE DANO ═══════ */
+const popups = [];
+function popupDano(x, y, z, texto, cor = '#fff'){
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.font = '900 72px Space Grotesk, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(13,10,26,0.9)';
+  ctx.strokeText(texto, 128, 64);
+  ctx.fillStyle = cor;
+  ctx.fillText(texto, 128, 64);
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set(2.4, 1.2, 1);
+  sp.position.set(x + rng(-0.4, 0.4), y, z + rng(-0.4, 0.4));
+  scene.add(sp);
+  popups.push({ sp, nasceu: performance.now() });
+}
+
+/* ═══════ BANDEIRAS ═══════ */
+function criarBandeiraMesh(turma, escala = 1){
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.35, 1.4), mat(0x5a5a68));
+  base.position.y = 0.18; base.castShadow = true; g.add(base);
+  const mastro = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.4, 0.22), mat(0x5a4632));
+  mastro.position.y = 1.9; mastro.castShadow = true; g.add(mastro);
+  const pano = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 0.12), mat(COR_TURMA[turma]));
+  pano.position.set(1.05, 3.0, 0); pano.castShadow = true; g.add(pano);
+  g.scale.setScalar(escala);
+  return g;
+}
+const pedestais = { A: { x: baseA.pedX, z: baseA.pedZ }, B: { x: baseB.pedX, z: baseB.pedZ } };
+for (const t of ['A','B']){
+  const halo = new THREE.Mesh(new THREE.BoxGeometry(5, 0.07, 5),
+    new THREE.MeshLambertMaterial({ color: COR_TURMA[t], transparent: true, opacity: 0.3 }));
+  halo.position.set(pedestais[t].x, 0.03, pedestais[t].z);
+  scene.add(halo);
+}
+const flags = {
+  A: { mesh: criarBandeiraMesh('A'), status: 'base', x: pedestais.A.x, z: pedestais.A.z, porId: '', caiuEm: 0 },
+  B: { mesh: criarBandeiraMesh('B'), status: 'base', x: pedestais.B.x, z: pedestais.B.z, porId: '', caiuEm: 0 },
+};
+for (const t of ['A','B']){
+  flags[t].mesh.position.set(flags[t].x, 0, flags[t].z);
+  scene.add(flags[t].mesh);
+}
+let placar = { A: 0, B: 0 };
+let guerraAtiva = true;
+
+function setFlag(turma, status, x, z, porId = ''){
+  const f = flags[turma];
+  f.status = status; f.porId = porId;
+  if (status === 'base'){
+    f.x = pedestais[turma].x; f.z = pedestais[turma].z;
+    f.mesh.visible = true;
+    f.mesh.position.set(f.x, 0, f.z);
+  } else if (status === 'chao'){
+    f.x = x; f.z = z; f.caiuEm = performance.now();
+    f.mesh.visible = true;
+    f.mesh.position.set(x, 0, z);
+  } else if (status === 'carregada'){
+    f.mesh.visible = false;
+  }
+  document.getElementById('avisoFlag').style.display =
+    (flags[EU.turma].status !== 'base') ? 'block' : 'none';
+}
+function atualizaPlacar(){
+  document.querySelector('#placar .pa').textContent = 'A ' + placar.A;
+  document.querySelector('#placar .pb').textContent = placar.B + ' B';
+}
+
+/* ═══════ AVATAR ═══════ */
+function criarAvatar(turma, adm = false, ch = null){
+  /* v0.7 — HUMANO ESTILIZADO (low-poly suave, estilo Sims Mobile) */
+  const g = new THREE.Group();
+  const hx = s => { const n = parseInt(String(s||'').replace('#',''),16); return isNaN(n)?null:n; };
+  const pele   = (ch && hx(ch.pele))      ?? 0xE8B88A;
+  const camisa = (ch && hx(ch.camisa))    ?? (COR_TURMA[turma] || 0x888888);
+  const calca  = (ch && hx(ch.calca))     ?? 0x2c2546;
+  const corCab = (ch && hx(ch.corCabelo)) ?? 0x3a2c1a;
+  const mats = [];
+  const mat = c => { const m = new THREE.MeshLambertMaterial({ color: c }); mats.push(m); return m; };
+  const add = (geo, m, x, y, z, parent) => {
+    const o = new THREE.Mesh(geo, m); o.position.set(x, y, z);
+    o.castShadow = true; (parent || g).add(o); return o;
+  };
+  const mPele = mat(pele), mCam = mat(camisa), mCalca = mat(calca), mCab = mat(corCab);
+  const mSapato = mat(0x33333c);
+  /* v0.8 — corpo e altura */
+  const W = ({ magro: 0.82, forte: 1.26 })[ch && ch.corpo] || 1;
+  const FEM = (ch && ch.genero) === 'fem';
+  const H = ({ baixo: 0.88, alto: 1.12 })[ch && ch.altura] || 1;
+
+  /* PERNAS — grupos-pivô no quadril (a animação gira o pivô = articulação real) */
+  const perna = lado => {
+    const p = new THREE.Group(); p.position.set(0.17 * lado * W, 1.18, 0); g.add(p);
+    add(new THREE.CapsuleGeometry(0.125, 0.72, 4, 10), mCalca, 0, -0.5, 0, p);
+    add(new THREE.BoxGeometry(0.26, 0.15, 0.44), mSapato, 0, -0.98, 0.07, p);
+    return p;
+  };
+  const pE = perna(-1), pD = perna(1);
+
+  /* QUADRIL + TRONCO + CINTO DE TURMA */
+  add(new THREE.SphereGeometry(0.36, 14, 12), mCalca, 0, 1.25, 0).scale.set((FEM?1.22:1.05)*W, 0.62, (FEM?0.84:0.78)*W);
+  const tronco = add(new THREE.CapsuleGeometry(0.34, 0.5, 6, 14), mCam, 0, 1.82, 0);
+  tronco.scale.set((FEM?0.92:1.06)*W, 1, (FEM?0.66:0.74)*W);
+  if (FEM){
+    // cintura marcada + ombros mais estreitos
+    add(new THREE.CylinderGeometry(0.3*W, 0.34*W, 0.3, 14), mCam, 0, 1.55, 0).scale.set(1, 1, 0.74);
+    // busto sutil
+    for (const lx of [-1, 1]) add(new THREE.SphereGeometry(0.13, 10, 8), mCam, 0.14*W*lx, 1.92, 0.16*W).scale.set(1, 0.85, 1);
+  }
+  add(new THREE.CylinderGeometry(0.37, 0.39, 0.13, 16), mat(COR_TURMA[turma] || 0x888888), 0, 1.47, 0).scale.set((FEM?1.18:1)*W, 1, (FEM?1.05:1)*W);
+
+  /* BRAÇOS — pivô no ombro */
+  const braco = lado => {
+    const b = new THREE.Group(); b.position.set((0.36 + 0.11*W) * lado * W, 2.1, 0); g.add(b);
+    add(new THREE.SphereGeometry(0.13, 10, 8), mCam, 0, 0, 0, b);
+    add(new THREE.CapsuleGeometry(0.095, 0.6, 4, 10), mCam, 0, -0.4, 0, b);
+    add(new THREE.SphereGeometry(0.105, 10, 8), mPele, 0, -0.78, 0, b);
+    return b;
+  };
+  const bE = braco(-1), bD = braco(1);
+
+  /* PESCOÇO + CABEÇA + ROSTO */
+  add(new THREE.CylinderGeometry(0.1, 0.12, 0.16, 10), mPele, 0, 2.36, 0);
+  const cabeca = add(new THREE.SphereGeometry(0.34, 18, 16), mPele, 0, 2.72, 0);
+  cabeca.scale.set(0.94, 1.05, 0.92);
+  /* v0.8 — ROSTO PARAMETRIZADO */
+  const mBranco = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const mPreto  = new THREE.MeshBasicMaterial({ color: 0x1c1c24 });
+  const tOlho = (ch && ch.olhos) || 'normal';
+  for (const lx of [-1, 1]){
+    if (tOlho === 'fechados'){
+      const r1 = add(new THREE.BoxGeometry(0.13, 0.024, 0.03), mPreto, 0.115*lx, 2.76, 0.295);
+      r1.rotation.z = 0.18 * lx;
+    } else {
+      const eEsc = tOlho === 'grandes' ? 1.5 : 1;
+      add(new THREE.SphereGeometry(0.055*eEsc, 8, 6), mBranco, 0.115*lx, 2.76, 0.265);
+      add(new THREE.SphereGeometry(0.028*eEsc, 6, 5), mPreto, 0.115*lx, 2.76, 0.265 + 0.04*eEsc);
+      if (tOlho === 'ciliados')
+        for (let ci = 0; ci < 3; ci++){
+          const cil = add(new THREE.BoxGeometry(0.012, 0.05, 0.012), mPreto, 0.115*lx + (ci-1)*0.045, 2.84, 0.3);
+          cil.rotation.z = (ci-1) * -0.4 * lx;
+        }
+    }
+    const sob = add(new THREE.BoxGeometry(0.12, 0.026, 0.03), mCab, 0.115*lx, 2.875, 0.285);
+    sob.rotation.z = -0.12 * lx;
+  }
+  const tOre = (ch && ch.orelha) || 'normal';
+  for (const lx of [-1, 1]){
+    if (tOre === 'elfo'){
+      const ore = add(new THREE.ConeGeometry(0.06, 0.22, 6), mPele, 0.33*lx, 2.78, 0);
+      ore.rotation.z = -0.85 * lx;
+    } else {
+      add(new THREE.SphereGeometry(tOre === 'grande' ? 0.095 : 0.06, 8, 6), mPele, 0.31*lx, 2.72, 0);
+    }
+  }
+  const tNar = (ch && ch.nariz) || 'medio';
+  const nR = tNar === 'grande' ? 0.07 : tNar === 'pequeno' ? 0.03 : 0.045;
+  add(new THREE.SphereGeometry(nR, 8, 6), mPele, 0, 2.68, 0.305 + nR*0.4).scale.set(0.9, 1.1, 0.95);
+  const tBoca = (ch && ch.boca) || 'sorriso';
+  if (tBoca === 'serio'){
+    add(new THREE.BoxGeometry(0.15, 0.025, 0.03), mat(0x9c4f4f), 0, 2.57, 0.3);
+  } else if (tBoca === 'surpreso'){
+    const oB = add(new THREE.TorusGeometry(0.05, 0.018, 6, 12), mat(0x9c4f4f), 0, 2.57, 0.3);
+    oB.scale.set(0.8, 1, 1);
+  } else {
+    const boca = add(new THREE.TorusGeometry(0.07, 0.018, 6, 12, Math.PI), mat(0x9c4f4f), 0, 2.59, 0.29);
+    boca.rotation.z = Math.PI; boca.rotation.x = -0.15;
+  }
+
+  /* CABELO (criado no FARME) */
+  const cab = ch && ch.cabelo;
+  const capCabelo = () => {
+    const c = add(new THREE.SphereGeometry(0.365, 16, 12, 0, Math.PI*2, 0, Math.PI*0.55), mCab, 0, 2.76, -0.015);
+    c.scale.set(0.96, 1.04, 0.95); return c;
+  };
+  if (cab === 'curto'){ capCabelo(); }
+  else if (cab === 'espetado'){
+    capCabelo();
+    for (const [sx, sz] of [[-0.14,0],[0,0.05],[0.14,0],[0,-0.13]]){
+      const sp = add(new THREE.ConeGeometry(0.07, 0.26, 6), mCab, sx, 3.12, sz);
+      sp.rotation.z = -sx * 1.4; sp.rotation.x = sz * 2;
+    }
+  }
+  else if (cab === 'longo'){
+    capCabelo();
+    add(new THREE.CapsuleGeometry(0.21, 0.62, 4, 10), mCab, 0, 2.32, -0.27).scale.set(1.35, 1, 0.55);
+    for (const lx of [-1, 1]) add(new THREE.CapsuleGeometry(0.07, 0.4, 4, 8), mCab, 0.3 * lx, 2.5, 0.05);
+  }
+  else if (cab === 'coque'){
+    capCabelo();
+    add(new THREE.SphereGeometry(0.135, 10, 8), mCab, 0, 3.13, -0.14);
+  }
+  else if (cab === 'moicano'){
+    for (let mi = 0; mi < 5; mi++){
+      const mo = add(new THREE.ConeGeometry(0.075, 0.3, 6), mCab, 0, 3.08, 0.22 - mi*0.12);
+      mo.rotation.x = (mi - 2) * 0.22;
+    }
+  }
+  else if (cab === 'franja'){
+    capCabelo();
+    add(new THREE.BoxGeometry(0.5, 0.13, 0.1), mCab, 0, 2.92, 0.275);
+    for (const lx of [-1, 1]) add(new THREE.BoxGeometry(0.1, 0.3, 0.16), mCab, 0.3*lx, 2.78, 0.16);
+  }
+  else if (cab === 'cacheado'){
+    capCabelo();
+    for (const cc of [[-0.2,3.0,0.12],[0.2,3.0,0.12],[0,3.07,-0.05],[-0.26,2.92,-0.18],[0.26,2.92,-0.18],[0,2.98,-0.3],[-0.1,3.06,0.02],[0.1,3.06,-0.12]])
+      add(new THREE.SphereGeometry(0.12, 8, 6), mCab, cc[0], cc[1], cc[2]);
+  }
+  /* ACESSÓRIO */
+  const ac = ch && ch.acess;
+  if (ac === 'oculos'){
+    const mOc = new THREE.MeshBasicMaterial({ color: 0x14141c });
+    for (const lx of [-1, 1]){
+      const aro = add(new THREE.TorusGeometry(0.085, 0.018, 8, 16), mOc, 0.115 * lx, 2.76, 0.3);
+      aro.rotation.y = 0.08 * lx;
+    }
+    add(new THREE.BoxGeometry(0.07, 0.02, 0.02), mOc, 0, 2.76, 0.31);
+  } else if (ac === 'bone'){
+    const mBone = mat(0xE5484D);
+    add(new THREE.SphereGeometry(0.355, 14, 10, 0, Math.PI*2, 0, Math.PI*0.5), mBone, 0, 2.79, -0.02);
+    add(new THREE.CylinderGeometry(0.21, 0.24, 0.035, 12, 1, false, -Math.PI/2, Math.PI), mBone, 0, 2.93, 0.3);
+  } else if (ac === 'coroa'){
+    const mOuro = mat(0xF0B429);
+    add(new THREE.CylinderGeometry(0.27, 0.29, 0.13, 14), mOuro, 0, 3.04, 0);
+    for (let i = 0; i < 5; i++){
+      const a = (i/5) * Math.PI * 2;
+      add(new THREE.ConeGeometry(0.045, 0.14, 6), mOuro, Math.cos(a)*0.27, 3.15, Math.sin(a)*0.27);
+    }
+  } else if (ac === 'halo'){
+    const halo = add(new THREE.TorusGeometry(0.3, 0.035, 8, 24), new THREE.MeshBasicMaterial({ color: 0xF0B429 }), 0, 3.34, 0);
+    halo.rotation.x = Math.PI/2;
+  }
+  if (adm){
+    const mOuro = mat(0xF0B429);
+    add(new THREE.CylinderGeometry(0.29, 0.31, 0.15, 14), mOuro, 0, 3.06, 0);
+    for (let i = 0; i < 6; i++){
+      const a = (i/6) * Math.PI * 2;
+      add(new THREE.ConeGeometry(0.05, 0.17, 6), mOuro, Math.cos(a)*0.29, 3.19, Math.sin(a)*0.29);
+    }
+  }
+  if (H !== 1) g.scale.setScalar(H);
+  const armaSlot = new THREE.Group();
+  armaSlot.position.set(0, -0.82, 0.14);
+  bD.add(armaSlot);
+  const flagSlot = new THREE.Group();
+  flagSlot.position.set(0, 2.4, -0.5);
+  flagSlot.rotation.z = 0.35;
+  g.add(flagSlot);
+  g.userData = { membros: { pE, pD, bE, bD }, mats, armaSlot, flagSlot, atacaAte: 0 };
+  return g;
+}
+function setArmaVisual(grupo, armaId){
+  const slot = grupo.userData.armaSlot;
+  while (slot.children.length) slot.remove(slot.children[0]);
+  const a = ARMAS[armaId];
+  if (!a || a.cor === null) return;
+  if (a.tipo === 'arco'){
+    const arco = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 6, 12, Math.PI),
+      new THREE.MeshLambertMaterial({ color: a.cor }));
+    arco.rotation.z = Math.PI/2; arco.castShadow = true;
+    slot.add(arco);
+  } else if (a.id === 4){ // martelo de cerco
+    const cabo = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.5, 0.14), mat(0x3a2c1a));
+    cabo.position.y = -0.55;
+    const cabeca = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.45),
+      new THREE.MeshLambertMaterial({ color: a.cor }));
+    cabeca.position.y = -1.25; cabeca.castShadow = true;
+    slot.add(cabo); slot.add(cabeca);
+  } else {
+    const lamina = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.5, 0.16),
+      new THREE.MeshLambertMaterial({ color: a.cor }));
+    lamina.position.y = -0.55; lamina.castShadow = true;
+    const cabo = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.12), mat(0x3a2c1a));
+    slot.add(lamina); slot.add(cabo);
+  }
+}
+function setFlagVisual(grupo, turmaFlag){
+  const slot = grupo.userData.flagSlot;
+  while (slot.children.length) slot.remove(slot.children[0]);
+  if (!turmaFlag) return;
+  const mini = criarBandeiraMesh(turmaFlag, 0.55);
+  mini.position.y = -0.3;
+  slot.add(mini);
+}
+function setFantasma(grupo, morto){
+  grupo.userData.mats.forEach(m => { m.transparent = true; m.opacity = morto ? 0.25 : 1; });
+}
+function flashGrupo(grupo){
+  const mats = grupo.userData?.mats;
+  if (mats){
+    mats.forEach(m => m.emissive && m.emissive.setHex(0xff2222));
+    setTimeout(() => mats.forEach(m => m.emissive && m.emissive.setHex(0x000000)), 130);
+  } else {
+    grupo.traverse(o => o.material?.emissive?.setHex(0xff2222));
+    setTimeout(() => grupo.traverse(o => o.material?.emissive?.setHex(0x000000)), 130);
+  }
+}
+
+/* sprites de nome+vida e balão */
+function spriteInfo(nome, turma, adm = false){
+  const c = document.createElement('canvas'); c.width = 512; c.height = 170;
+  const x = c.getContext('2d');
+  const desenhar = (hpFrac = 1) => {
+    x.clearRect(0,0,512,170);
+    x.font = '700 50px Space Grotesk, sans-serif';
+    const rotulo = adm ? '👑 ' + nome : nome;
+    const w = Math.min(490, x.measureText(rotulo).width + 60);
+    x.fillStyle = 'rgba(13,10,26,0.75)';
+    x.beginPath(); x.roundRect(256 - w/2, 10, w, 76, 20); x.fill();
+    x.strokeStyle = adm ? '#FFD56A' : (turma === 'A' ? '#7C5CFC' : '#F0B429');
+    x.lineWidth = 5; x.stroke();
+    x.fillStyle = adm ? '#FFE9B0' : (turma === 'A' ? '#CDBFFF' : '#FFE2A1');
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(rotulo, 256, 50);
+    x.fillStyle = 'rgba(13,10,26,0.75)';
+    x.beginPath(); x.roundRect(146, 102, 220, 30, 14); x.fill();
+    x.fillStyle = hpFrac > 0.45 ? '#3DD68C' : (hpFrac > 0.2 ? '#F0B429' : '#E5484D');
+    if (hpFrac > 0){ x.beginPath(); x.roundRect(152, 108, 208 * hpFrac, 18, 9); x.fill(); }
+  };
+  desenhar(1);
+  const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false }));
+  s.scale.set(4.2, 1.4, 1); s.position.y = 3.7;
+  s.userData.redraw = f => { desenhar(f); t.needsUpdate = true; };
+  return s;
+}
+function spriteBalao(msg){
+  const c = document.createElement('canvas'); c.width = 640; c.height = 256;
+  const x = c.getContext('2d');
+  x.font = '600 40px Space Grotesk, sans-serif';
+  const palavras = msg.split(' '); const linhas = []; let lin = '';
+  for (const p of palavras){
+    if (x.measureText(lin + ' ' + p).width > 540 && lin){ linhas.push(lin); lin = p; }
+    else lin = lin ? lin + ' ' + p : p;
+  }
+  linhas.push(lin);
+  const h = linhas.length * 50 + 50;
+  const y0 = 200 - h;
+  x.fillStyle = '#ffffff';
+  x.beginPath(); x.roundRect(40, y0, 560, h, 26); x.fill();
+  x.beginPath(); x.moveTo(290, y0+h); x.lineTo(350, y0+h); x.lineTo(320, y0+h+34); x.fill();
+  x.fillStyle = '#1a1530'; x.textAlign = 'center';
+  linhas.forEach((l, i) => x.fillText(l, 320, y0 + 60 + i * 50));
+  const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false }));
+  s.scale.set(6, 2.4, 1); s.position.y = 5.4;
+  return s;
+}
+
+/* ═══════ ESTADO LOCAL + INPUT ═══════ */
+let player = null, meuSprite = null;
+const pos = { x: 0, y: 0, z: 0, ry: 0 };
+let vy = 0;
+const cam = { yaw: 0, pitch: 0.42, dist: 14 };
+const teclas = {};
+let sprintToggle = false, noclip = false;
+let ultimoAtaque = 0;
+const projeteis = [];
+
+/* FIX "andar sozinho": limpa teclas/joystick em qualquer perda de contexto */
+function limparEntradas(){
+  for (const k in teclas) teclas[k] = false;
+  joy.ativo = false; joy.dx = 0; joy.dz = 0;
+  const stick = document.getElementById('joy-stick');
+  if (stick) stick.style.transform = 'translate(-50%,-50%)';
+}
+addEventListener('blur', limparEntradas);
+document.addEventListener('visibilitychange', () => { if (document.hidden) limparEntradas(); });
+
+addEventListener('keydown', e => {
+  const ci = document.getElementById('chatInput');
+  if (e.key === 'Enter'){
+    if (document.activeElement !== ci){ limparEntradas(); ci.focus(); e.preventDefault(); }
+    return;
+  }
+  if (document.activeElement === ci) return;
+  if (e.key === ' '){ atacar(); e.preventDefault(); return; }  // ESPAÇO = golpe (repete ao segurar)
+  if (e.repeat) return;
+  teclas[e.key.toLowerCase()] = true;
+  if (e.key === 'Shift') pular();
+  if (e.key.toLowerCase() === 'f') atacar();
+  if (/^[1-7]$/.test(e.key)) selecionarArma(parseInt(e.key) - 1);
+  if (EU.adm && e.key.toLowerCase() === 'n'){
+    noclip = !noclip; admBtnState();
+    toast(noclip ? '👻 Atravessar paredes: ON' : '👻 Atravessar paredes: OFF');
+  }
+});
+addEventListener('keyup', e => teclas[e.key.toLowerCase()] = false);
+document.getElementById('chatInput').addEventListener('focus', limparEntradas);
+
+function pular(){
+  if (!player || EU.morto) return;
+  if (pos.y <= 0.01) vy = 11;
+}
+function tp(x, z){ pos.x = x; pos.z = z; moveuDesdeUltimoTick = true; }
+
+/* câmera orbital — ataque agora é IMEDIATO no clique (estilo Minecraft) */
+const joy = { ativo:false, dx:0, dz:0 };
+{
+  const el = renderer.domElement;
+  let arrastando = false, lx = 0, ly = 0, idTouch = null;
+  // botão direito: totalmente neutralizado (era a fonte do problema)
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('mousedown', e => {
+    if (e.button !== 0) { e.preventDefault(); return; }  // só o esquerdo
+    arrastando = true; lx = e.clientX; ly = e.clientY;   // segurar e arrastar = girar câmera
+  });
+  addEventListener('mousemove', e => {
+    if (!arrastando) return;
+    cam.yaw   -= (e.clientX - lx) * 0.0055;
+    cam.pitch  = THREE.MathUtils.clamp(cam.pitch + (e.clientY - ly) * 0.004, 0.12, 1.25);
+    lx = e.clientX; ly = e.clientY;
+  });
+  addEventListener('mouseup', () => arrastando = false);
+  el.addEventListener('wheel', e => {
+    cam.dist = THREE.MathUtils.clamp(cam.dist + e.deltaY * 0.012, 7, 30);
+    e.preventDefault();
+  }, { passive: false });
+  el.addEventListener('touchstart', e => {
+    if (idTouch !== null) return;
+    const t = e.changedTouches[0];
+    idTouch = t.identifier; lx = t.clientX; ly = t.clientY;
+  }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    for (const t of e.changedTouches){
+      if (t.identifier !== idTouch) continue;
+      cam.yaw   -= (t.clientX - lx) * 0.007;
+      cam.pitch  = THREE.MathUtils.clamp(cam.pitch + (t.clientY - ly) * 0.005, 0.12, 1.25);
+      lx = t.clientX; ly = t.clientY;
+    }
+  }, { passive: true });
+  const fimTouch = e => {
+    for (const t of e.changedTouches) if (t.identifier === idTouch) idTouch = null;
+  };
+  el.addEventListener('touchend', fimTouch);
+  el.addEventListener('touchcancel', fimTouch);
+}
+
+/* joystick (com touchcancel — outro fix do "andar sozinho") */
+{
+  const el = document.getElementById('joy'), stick = document.getElementById('joy-stick');
+  let cx = 0, cy = 0;
+  const start = e => { const r = el.getBoundingClientRect(); cx = r.left + r.width/2; cy = r.top + r.height/2; joy.ativo = true; move(e); };
+  const move = e => {
+    if (!joy.ativo) return;
+    const t = e.touches ? e.touches[0] : e;
+    let dx = t.clientX - cx, dy = t.clientY - cy;
+    const d = Math.hypot(dx, dy), max = 42;
+    if (d > max){ dx = dx/d*max; dy = dy/d*max; }
+    stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    joy.dx = dx / max; joy.dz = dy / max;
+    e.preventDefault();
+  };
+  const end = () => { joy.ativo = false; joy.dx = joy.dz = 0; stick.style.transform = 'translate(-50%,-50%)'; };
+  el.addEventListener('touchstart', start, {passive:false});
+  el.addEventListener('touchmove',  move,  {passive:false});
+  el.addEventListener('touchend',   end);
+  el.addEventListener('touchcancel', end);
+}
+document.getElementById('btnPulo').addEventListener('touchstart', e => { pular(); e.preventDefault(); }, {passive:false});
+document.getElementById('btnPulo').addEventListener('mousedown', pular);
+document.getElementById('btnAtk').addEventListener('touchstart', e => { atacar(); e.preventDefault(); }, {passive:false});
+document.getElementById('btnAtk').addEventListener('mousedown', atacar);
+function proximaArma(){
+  const livres = armasLiberadas();
+  for (let k = 1; k <= ARMAS.length; k++){
+    const i = (EU.arma + k) % ARMAS.length;
+    if (livres[i]){ selecionarArma(i); toast(ARMAS[i].icone + ' ' + ARMAS[i].nome); return; }
+  }
+}
+document.getElementById('btnArma').addEventListener('touchstart', e => { proximaArma(); e.preventDefault(); }, {passive:false});
+document.getElementById('btnArma').addEventListener('mousedown', proximaArma);
+
+/* colisão */
+function colide(nx, nz){
+  const r = 0.55;
+  if (nx < MUNDO.minX+1 || nx > MUNDO.maxX-1 || nz < MUNDO.minZ+1 || nz > MUNDO.maxZ-1) return true;
+  if (EU.adm && noclip) return false;
+  for (const c of colisores)
+    if (c.ativo && nx+r > c.x1 && nx-r < c.x2 && nz+r > c.z1 && nz-r < c.z2) return true;
+  for (const p of portoes){
+    if (nx+r > p.x1 && nx-r < p.x2 && nz+r > p.z1 && nz-r < p.z2){
+      const podePassar = EU.adm || EU.turma === p.turma;
+      if (!podePassar) return true;
+      if (p.mesh.position.y < p.abertoY - 1.2) return true;
+    }
+  }
+  return false;
+}
+
+/* ═══════ OUTROS JOGADORES ═══════ */
+const outros = new Map();
+function addOutro(id, m){
+  if (outros.has(id) || id === EU.id) return;
+  const g = criarAvatar(m.turma, m.adm, m.ch || null);
+  const sp = spriteInfo(m.nome, m.turma, m.adm);
+  g.add(sp);
+  g.position.set(m.x || 0, 0, m.z || 0);
+  scene.add(g);
+  outros.set(id, {
+    grupo: g, sprite: sp, nome: m.nome, turma: m.turma, adm: !!m.adm,
+    alvo: { x: m.x || 0, y: 0, z: m.z || 0, ry: 0 },
+    hp: m.hp ?? 100, maxHp: m.mhp ?? 100, morto: false, arma: 0, fl: '',
+    balao: null, balaoTimer: 0, fase: Math.random()*6
+  });
+  atualizaOnline();
+}
+function delOutro(id){
+  const o = outros.get(id);
+  if (!o) return;
+  if (o.fl) setFlag(o.fl, 'chao', o.grupo.position.x, o.grupo.position.z);
+  scene.remove(o.grupo);
+  outros.delete(id);
+  atualizaOnline();
+}
+function atualizaOnline(){
+  document.getElementById('online').textContent = `● ${outros.size + 1} online`;
+}
+function aplicaEstadoRemoto(o, p){
+  o.alvo = { x: p.x, y: p.y || 0, z: p.z, ry: p.ry };
+  if (p.hp !== undefined && (p.hp !== o.hp || p.mhp !== o.maxHp)){
+    o.hp = p.hp; o.maxHp = p.mhp || 100;
+    o.sprite.userData.redraw(Math.max(0, o.hp / o.maxHp));
+  }
+  if (p.mt !== undefined && p.mt !== o.morto){
+    o.morto = p.mt;
+    setFantasma(o.grupo, o.morto);
+  }
+  if (p.w !== undefined && p.w !== o.arma){
+    o.arma = p.w;
+    setArmaVisual(o.grupo, p.w);
+  }
+  if (p.fl !== undefined && p.fl !== o.fl){
+    o.fl = p.fl;
+    setFlagVisual(o.grupo, p.fl);
+  }
+}
+
+/* ═══════ REALTIME ═══════ */
+let canal = null, moveuDesdeUltimoTick = false;
+function payloadPos(){
+  return { id: EU.id, nome: EU.nome, turma: EU.turma, adm: EU.adm,
+    x:+pos.x.toFixed(2), y:+pos.y.toFixed(2), z:+pos.z.toFixed(2), ry:+pos.ry.toFixed(2),
+    hp: EU.hp, mhp: EU.maxHp, mt: EU.morto, w: EU.arma, fl: EU.carregando, ch: EU.char };
+}
+async function conectar(){
+  if (!ONLINE_MODE){ document.getElementById('status-conn').textContent = 'offline'; return; }
+  canal = sb.channel(SALA, { config: { presence: { key: EU.id }, broadcast: { self: false } } });
+
+  canal.on('presence', { event: 'sync' }, () => {
+    const estado = canal.presenceState();
+    const vivos = new Set();
+    for (const key in estado){
+      const m = estado[key][0];
+      if (key !== EU.id){
+        vivos.add(key);
+        addOutro(key, m);
+        if (m.pa !== undefined && (m.pa > placar.A || m.pb > placar.B)){
+          placar.A = Math.max(placar.A, m.pa);
+          placar.B = Math.max(placar.B, m.pb);
+          atualizaPlacar();
+        }
+      }
+    }
+    for (const id of [...outros.keys()]) if (!vivos.has(id)) delOutro(id);
+  });
+  canal.on('broadcast', { event: 'pos' }, ({ payload: p }) => {
+    const o = outros.get(p.id);
+    if (o) aplicaEstadoRemoto(o, p);
+    else if (p.id !== EU.id) addOutro(p.id, p);
+  });
+  canal.on('broadcast', { event: 'adm' }, ({ payload: p }) => { executarComandoAdm(p); });
+  canal.on('broadcast', { event: 'bloco' }, ({ payload: p }) => {
+    const b = BARREIRAS.find(x => x.id === p.id);
+    if (!b) return;
+    if (p.d) danificarBarreira(b, p.d);
+    else if (typeof p.x === 'number') moverBarreira(b, p.x, p.z);
+  });
+  canal.on('broadcast', { event: 'chat' }, ({ payload: p }) => {
+    if (p.id === EU.id) return;
+    const o = outros.get(p.id);
+    if (o) mostrarBalao(o, p.msg);
+    const d = o ? Math.hypot(o.alvo.x - pos.x, o.alvo.z - pos.z) : 999;
+    if (d <= RAIO_CHAT) feed(p.nome, p.turma, p.msg);
+  });
+  canal.on('broadcast', { event: 'atk' }, ({ payload: p }) => {
+    const o = outros.get(p.id);
+    if (o){
+      o.grupo.userData.atacaAte = performance.now() + 260;
+      if (p.tipo === 'arco') criarFlecha(p.x, p.y, p.z, p.dx, p.dz, p.id, false);
+    }
+  });
+  canal.on('broadcast', { event: 'hit' }, ({ payload: p }) => {
+    if (p.alvo !== EU.id) return;
+    if (p.cura) curarLocal(p.cura);
+    else receberDano(p.dano, p.deNome);
+  });
+  canal.on('broadcast', { event: 'muro' }, ({ payload: p }) => {
+    aplicaDanoMuro(p.idx, p.dano);
+  });
+  canal.on('broadcast', { event: 'flag' }, ({ payload: p }) => {
+    if (p.por === EU.id) return;
+    if (p.acao === 'pega')     setFlag(p.b, 'carregada', 0, 0, p.por);
+    if (p.acao === 'cai')      setFlag(p.b, 'chao', p.x, p.z);
+    if (p.acao === 'devolve')  setFlag(p.b, 'base');
+    if (p.acao === 'captura'){
+      setFlag(p.b, 'base');
+      placar = { A: p.pa, B: p.pb };
+      atualizaPlacar();
+      feed('⚔ GUERRA', p.time, `Turma ${p.time} capturou a bandeira! (${p.pa} × ${p.pb})`, true);
+      checarVitoria();
+    }
+  });
+  canal.subscribe(async st => {
+    document.getElementById('status-conn').textContent = st === 'SUBSCRIBED' ? '· conectado' : '· ' + st.toLowerCase();
+    if (st === 'SUBSCRIBED') await trackPresenca();
+  });
+  setInterval(() => {
+    if (canal && moveuDesdeUltimoTick){
+      canal.send({ type:'broadcast', event:'pos', payload: payloadPos() });
+      moveuDesdeUltimoTick = false;
+    }
+  }, TICK_POS_MS);
+}
+async function trackPresenca(){
+  if (!canal) return;
+  await canal.track({ nome: EU.nome, turma: EU.turma, adm: EU.adm, ch: EU.char,
+    x: pos.x, z: pos.z, hp: EU.hp, mhp: EU.maxHp, pa: placar.A, pb: placar.B });
+}
+function broadcast(event, payload){
+  if (canal) canal.send({ type:'broadcast', event, payload });
+}
+
+/* ═══════ EVENTO: COMANDOS ADM + CRONÔMETRO (v0.7) ═══════ */
+function executarComandoAdm(p){
+  if (!p || !p.cmd) return;
+  if (p.cmd === 'start'){
+    EVT.fim = p.fim; EVT.encerrada = false;
+    placar = { A: 0, B: 0 }; atualizaPlacar();
+    feed('🏰 EVENTO', 'A', '⚔️ A BATALHA COMEÇOU! 15 minutos — capture mais bandeiras que o inimigo!', true);
+    toast('⚔️ BATALHA INICIADA — 15:00!');
+  } else if (p.cmd === 'stop'){
+    EVT.fim = Date.now(); // força o fim agora
+  } else if (p.cmd === 'zera'){
+    placar = { A: 0, B: 0 }; atualizaPlacar();
+    toast('🔄 Placar zerado pelo professor.');
+  } else if (p.cmd === 'aviso' && p.msg){
+    feed('📢 PROFESSOR', 'A', p.msg, true);
+    toast('📢 ' + p.msg);
+  }
+}
+function cmdAdm(cmd){
+  if (!EU.adm) return;
+  let payload = { cmd };
+  if (cmd === 'start') payload.fim = Date.now() + 15*60000;
+  if (cmd === 'aviso'){
+    const msg = prompt('📢 Aviso para todos os jogadores:');
+    if (!msg) return;
+    payload.msg = msg.slice(0, 120);
+  }
+  executarComandoAdm(payload);          // aplica local
+  broadcast('adm', payload);            // propaga para todos
+}
+window.cmdAdm = cmdAdm; // módulo ES: expõe para os onclick dos botões
+function montarPainelAdm(){
+  if (!EU.adm || document.getElementById('admPanel')) return;
+  const d = document.createElement('div');
+  d.id = 'admPanel';
+  d.style.cssText = 'position:fixed;left:12px;bottom:120px;z-index:60;display:flex;flex-direction:column;gap:7px;background:rgba(13,10,31,.82);border:1px solid #F0B429;border-radius:14px;padding:10px;backdrop-filter:blur(6px)';
+  d.innerHTML = '<div style="font-size:10px;color:#F0B429;letter-spacing:1px;text-align:center">👑 ADM</div>' +
+    ['<button onclick="cmdAdm(\'start\')" style="STL">▶️ Iniciar 15:00</button>',
+     '<button onclick="cmdAdm(\'stop\')"  style="STL">⏹️ Encerrar</button>',
+     '<button onclick="cmdAdm(\'zera\')"  style="STL">🔄 Zerar placar</button>',
+     '<button onclick="cmdAdm(\'aviso\')" style="STL">📢 Aviso</button>'
+    ].join('').replaceAll('STL','background:#1d1b3a;color:#f0eeff;border:1px solid #4a4470;border-radius:9px;padding:7px 12px;font-family:inherit;font-size:12px;cursor:pointer');
+  document.body.appendChild(d);
+}
+function montarTimerHud(){
+  if (document.getElementById('evtTimer')) return;
+  const t = document.createElement('div');
+  t.id = 'evtTimer';
+  t.style.cssText = 'position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:55;display:none;background:rgba(13,10,31,.85);border:1px solid #8b5cf6;border-radius:12px;padding:5px 18px;font-family:Orbitron,monospace;font-size:20px;font-weight:700;color:#ffd93d;letter-spacing:2px';
+  document.body.appendChild(t);
+}
+function fimDeBatalha(){
+  EVT.encerrada = true; EVT.fim = 0;
+  const a = placar.A, b = placar.B;
+  const txt = a === b ? `🤝 EMPATE! ${a} × ${b} — que guerra!`
+    : `🏆 TURMA ${a > b ? 'A' : 'B'} VENCEU! ${Math.max(a,b)} × ${Math.min(a,b)} bandeiras!`;
+  const v = document.getElementById('vitoria');
+  document.getElementById('vitTexto').textContent = txt;
+  v.style.display = 'flex';
+  feed('🏰 FIM', 'A', txt, true);
+  setTimeout(() => {
+    v.style.display = 'none';
+    placar = { A: 0, B: 0 }; atualizaPlacar();
+    setFlag('A', 'base'); setFlag('B', 'base');
+    restaurarMuros(); EU.carregando = '';
+  }, 9000);
+}
+setInterval(() => {
+  const el = document.getElementById('evtTimer');
+  if (!el) return;
+  if (EVT.fim > 0 && !EVT.encerrada){
+    const resta = EVT.fim - Date.now();
+    if (resta <= 0){ el.style.display = 'none'; fimDeBatalha(); return; }
+    const mm = String(Math.floor(resta/60000)).padStart(2,'0');
+    const ss = String(Math.floor((resta%60000)/1000)).padStart(2,'0');
+    el.textContent = '⏱️ ' + mm + ':' + ss;
+    el.style.display = 'block';
+    el.style.color = resta < 60000 ? '#fc6a6a' : '#ffd93d';
+  } else el.style.display = 'none';
+}, 400);
+
+/* ═══════ COMBATE ═══════ */
+function armasLiberadas(){
+  if (eventoAtivo() && !EU.adm){
+    return ARMAS.map(a => a.id === 0 || EVT.armas.includes(a.id));
+  }
+  return ARMAS.map(a => EU.adm || EU.aura >= a.minAura);
+}
+function selecionarArma(i){
+  if (!ARMAS[i]) return;
+  if (!armasLiberadas()[i]){
+    toast(eventoAtivo()
+      ? `🔒 ${ARMAS[i].icone} ${ARMAS[i].nome} — só com compra na 🛒 Loja de Guerra do FARME (máx. 2 armas)!`
+      : `🔒 ${ARMAS[i].icone} ${ARMAS[i].nome} exige ${ARMAS[i].minAura.toLocaleString('pt-BR')} de aura no FARME!`);
+    return;
+  }
+  EU.arma = i;
+  setArmaVisual(player, i);
+  document.getElementById('armaTexto').textContent = ARMAS[i].icone + ' ' + ARMAS[i].nome;
+  document.querySelectorAll('.slot').forEach((s, k) => s.classList.toggle('sel', k === i));
+  moveuDesdeUltimoTick = true;
+}
+function montarHotbar(){
+  const hb = document.getElementById('hotbar');
+  hb.innerHTML = '';
+  const livres = armasLiberadas();
+  ARMAS.forEach((a, i) => {
+    const d = document.createElement('div');
+    d.className = 'slot' + (i === EU.arma ? ' sel' : '') + (livres[i] ? '' : ' lock');
+    d.innerHTML = `<span class="k">${i+1}</span>${a.icone}` + (livres[i] ? '' : '<span class="cad">🔒</span>');
+    d.title = a.nome + (livres[i] ? '' : ` — exige ${a.minAura} aura`);
+    d.addEventListener('click', () => selecionarArma(i));
+    hb.appendChild(d);
+  });
+}
+
+/* direção de mira = para onde a câmera aponta (a mira central) */
+function dirMira(){
+  return { x: -Math.sin(cam.yaw), z: -Math.cos(cam.yaw) };
+}
+function anguloFrontal(dx, dz, dirX, dirZ){
+  const ang = Math.atan2(dx, dz), mira = Math.atan2(dirX, dirZ);
+  let dif = ang - mira;
+  while (dif >  Math.PI) dif -= Math.PI*2;
+  while (dif < -Math.PI) dif += Math.PI*2;
+  return Math.abs(dif);
+}
+/* alvo no alcance? (para a mira ficar vermelha e o golpe acertar) */
+function alvoNaMira(alcance){
+  const d = dirMira();
+  // jogadores inimigos
+  for (const [id, o] of outros){
+    if (o.turma === EU.turma || o.morto) continue;
+    const dx = o.grupo.position.x - pos.x, dz = o.grupo.position.z - pos.z;
+    if (Math.hypot(dx, dz) <= alcance && anguloFrontal(dx, dz, d.x, d.z) < 1.0)
+      return { tipo: 'player', id, o };
+  }
+  // bonecos de treino
+  for (const b of bonecos){
+    if (b.morto) continue;
+    const dx = b.x - pos.x, dz = b.z - pos.z;
+    if (Math.hypot(dx, dz) <= alcance && anguloFrontal(dx, dz, d.x, d.z) < 1.0)
+      return { tipo: 'boneco', b };
+  }
+  // seções de muralha (inimigas ou não — treino vale)
+  for (const m of muros){
+    if (m.destruido) continue;
+    const cx = THREE.MathUtils.clamp(pos.x, m.x - m.sx/2, m.x + m.sx/2);
+    const cz = THREE.MathUtils.clamp(pos.z, m.z - m.sz/2, m.z + m.sz/2);
+    const dx = cx - pos.x, dz = cz - pos.z;
+    if (Math.hypot(dx, dz) <= alcance + 0.5 && anguloFrontal(m.x - pos.x, m.z - pos.z, d.x, d.z) < 1.3)
+      return { tipo: 'muro', m };
+  }
+  return null;
+}
+
+function atacar(){
+  if (!player || EU.morto || !guerraAtiva) return;
+  if (EU.carregando){ toast('🚩 Você carrega a bandeira — não pode atacar! Corra!'); return; }
+  const a = ARMAS[EU.arma];
+  const agora = performance.now();
+  if (agora - ultimoAtaque < a.cd) return;
+  ultimoAtaque = agora;
+  player.userData.atacaAte = agora + 260;
+  const d = dirMira();
+  pos.ry = Math.atan2(d.x, d.z);     // personagem encara a mira
+  moveuDesdeUltimoTick = true;
+
+  if (a.tipo === 'arco'){
+    criarFlecha(pos.x, pos.y + 2, pos.z, d.x, d.z, EU.id, true);
+    broadcast('atk', { id: EU.id, tipo: 'arco', x: pos.x, y: pos.y + 2, z: pos.z, dx: d.x, dz: d.z });
+    return;
+  }
+  broadcast('atk', { id: EU.id, tipo: a.tipo });
+
+  if (a.tipo === 'cura'){
+    let curou = 0;
+    curarLocal(a.cura);
+    popupDano(pos.x, 3, pos.z, '+' + a.cura, '#3DD68C');
+    outros.forEach((o, id) => {
+      if (o.turma !== EU.turma || o.morto) return;
+      const dist = Math.hypot(o.grupo.position.x - pos.x, o.grupo.position.z - pos.z);
+      if (dist <= a.raio){
+        broadcast('hit', { alvo: id, cura: a.cura, deNome: EU.nome });
+        popupDano(o.grupo.position.x, 3, o.grupo.position.z, '+' + a.cura, '#3DD68C');
+        curou++;
+      }
+    });
+    if (curou) toast(`✨ Curou ${curou} aliado(s)!`);
+    return;
+  }
+  // melee — barreira próxima tem prioridade se a arma dana estruturas
+  if (a.danoMuro >= 20){ // só armas de cerco (Martelo) quebram barreiras
+    let perto = null, dmin = 1e9;
+    for (const bb of BARREIRAS){
+      if (!bb.viva) continue;
+      const d = Math.hypot(bb.mesh.position.x - pos.x, bb.mesh.position.z - pos.z);
+      if (d < a.alcance + 1.15 && d < dmin){ dmin = d; perto = bb; }
+    }
+    if (perto){
+      danificarBarreira(perto, a.danoMuro);
+      broadcast('bloco', { id: perto.id, d: a.danoMuro });
+      marcarAcerto();
+      return;
+    }
+  }
+  // melee — prioridade: jogador > boneco > muralha
+  const alvo = alvoNaMira(a.alcance);
+  if (!alvo) return;
+  if (alvo.tipo === 'player'){
+    broadcast('hit', { alvo: alvo.id, dano: a.dano, de: EU.id, deNome: EU.nome });
+    flashGrupo(alvo.o.grupo);
+    popupDano(alvo.o.grupo.position.x, 3, alvo.o.grupo.position.z, '-' + a.dano, '#ff8a8d');
+    marcarAcerto();
+  } else if (alvo.tipo === 'boneco'){
+    danoBoneco(alvo.b, a.dano);
+    marcarAcerto();
+  } else if (alvo.tipo === 'muro'){
+    if (a.danoMuro <= 0) return;
+    aplicaDanoMuro(alvo.m.idx, a.danoMuro);
+    broadcast('muro', { idx: alvo.m.idx, dano: a.danoMuro });
+    marcarAcerto();
+  }
+}
+function marcarAcerto(){
+  const m = document.getElementById('mira');
+  m.classList.add('acerto');
+  setTimeout(() => m.classList.remove('acerto'), 110);
+}
+function criarFlecha(x, y, z, dx, dz, deId, comDano){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 1.0), mat(0x6e4520));
+  m.position.set(x, y, z);
+  m.rotation.y = Math.atan2(dx, dz);
+  m.castShadow = true;
+  scene.add(m);
+  projeteis.push({ mesh: m, vx: dx * 26, vy: 2.2, vz: dz * 26, deId, comDano, nasceu: performance.now() });
+}
+function receberDano(dano, deNome){
+  if (EU.morto || !player) return;
+  EU.hp = Math.max(0, EU.hp - dano);
+  atualizaHpHud();
+  flashGrupo(player);
+  popupDano(pos.x, 3, pos.z, '-' + dano, '#ff8a8d');
+  moveuDesdeUltimoTick = true;
+  if (EU.hp <= 0) morrer(deNome);
+}
+function curarLocal(q){
+  if (EU.morto) return;
+  EU.hp = Math.min(EU.maxHp, EU.hp + q);
+  atualizaHpHud();
+  moveuDesdeUltimoTick = true;
+}
+function atualizaHpHud(){
+  document.getElementById('hpTexto').textContent = `${EU.hp} / ${EU.maxHp}`;
+  const f = document.getElementById('hpfill');
+  const frac = EU.hp / EU.maxHp;
+  f.style.width = (frac * 100) + '%';
+  f.style.background = frac > 0.45
+    ? 'linear-gradient(90deg,#3DD68C,#a3e98c)'
+    : frac > 0.2 ? 'linear-gradient(90deg,#F0B429,#ffd56a)'
+                 : 'linear-gradient(90deg,#E5484D,#ff8a8d)';
+}
+function morrer(deNome){
+  EU.morto = true;
+  limparEntradas();
+  setFantasma(player, true);
+  if (EU.carregando){
+    const b = EU.carregando;
+    EU.carregando = '';
+    setFlagVisual(player, '');
+    setFlag(b, 'chao', pos.x, pos.z);
+    broadcast('flag', { acao: 'cai', b, x: +pos.x.toFixed(1), z: +pos.z.toFixed(1), por: EU.id });
+  }
+  moveuDesdeUltimoTick = true;
+  feed('💀', EU.turma, deNome ? `Você caiu para ${deNome}!` : 'Você caiu em batalha!', true);
+  const ov = document.getElementById('morte');
+  ov.style.display = 'flex';
+  let resta = Math.round(RESPAWN_MS / 1000);
+  document.getElementById('contaMorte').textContent = resta;
+  const intv = setInterval(() => {
+    resta--;
+    document.getElementById('contaMorte').textContent = Math.max(0, resta);
+    if (resta <= 0){ clearInterval(intv); renascer(); }
+  }, 1000);
+}
+function renascer(){
+  EU.morto = false;
+  EU.hp = EU.maxHp;
+  pos.x = EU.turma === 'A' ? -76 : 76;
+  pos.z = (Math.random() - 0.5) * 8;
+  pos.y = 0; vy = 0;
+  setFantasma(player, false);
+  atualizaHpHud();
+  document.getElementById('morte').style.display = 'none';
+  moveuDesdeUltimoTick = true;
+}
+
+/* ═══════ BANDEIRAS — lógica local (Fase 2 = servidor) ═══════ */
+function loopBandeiras(t){
+  if (!player || !guerraAtiva) return;
+  const inimiga = outraTurma(EU.turma);
+  const fi = flags[inimiga];
+  const fm = flags[EU.turma];
+
+  if (!EU.morto && !EU.carregando){
+    if (fi.status !== 'carregada'){
+      const d = Math.hypot(fi.x - pos.x, fi.z - pos.z);
+      if (d < 1.8){
+        EU.carregando = inimiga;
+        setFlag(inimiga, 'carregada', 0, 0, EU.id);
+        setFlagVisual(player, inimiga);
+        broadcast('flag', { acao: 'pega', b: inimiga, por: EU.id });
+        toast('🚩 Você pegou a bandeira! Leve-a viva até o seu pedestal!');
+        moveuDesdeUltimoTick = true;
+      }
+    }
+    if (fm.status === 'chao'){
+      const d = Math.hypot(fm.x - pos.x, fm.z - pos.z);
+      if (d < 1.8){
+        setFlag(EU.turma, 'base');
+        broadcast('flag', { acao: 'devolve', b: EU.turma, por: EU.id });
+        toast('🛡️ Bandeira da turma devolvida à base!');
+      }
+    }
+  }
+  if (EU.carregando && !EU.morto){
+    const ped = pedestais[EU.turma];
+    const d = Math.hypot(ped.x - pos.x, ped.z - pos.z);
+    if (d < 3){
+      const b = EU.carregando;
+      EU.carregando = '';
+      setFlagVisual(player, '');
+      setFlag(b, 'base');
+      placar[EU.turma]++;
+      atualizaPlacar();
+      trackPresenca();
+      broadcast('flag', { acao: 'captura', b, por: EU.id, time: EU.turma, pa: placar.A, pb: placar.B });
+      feed('🏆', EU.turma, `Você capturou a bandeira! (${placar.A} × ${placar.B})`, true);
+      moveuDesdeUltimoTick = true;
+      checarVitoria();
+    }
+  }
+  for (const tb of ['A','B']){
+    const f = flags[tb];
+    if (f.status === 'chao' && t - f.caiuEm > FLAG_CHAO_MS){
+      setFlag(tb, 'base');
+      broadcast('flag', { acao: 'devolve', b: tb, por: EU.id });
+    }
+    if (f.status !== 'carregada') f.mesh.rotation.y = t * 0.0006;
+  }
+}
+function checarVitoria(){
+  for (const t of ['A','B']){
+    if (placar[t] >= CAPTURAS_VITORIA && guerraAtiva && !batalhaRolando()){
+      guerraAtiva = false;
+      const v = document.getElementById('vitoria');
+      document.getElementById('vitTexto').textContent = `🏆 TURMA ${t} VENCEU A GUERRA!`;
+      v.style.display = 'flex';
+      setTimeout(() => {
+        placar = { A: 0, B: 0 };
+        atualizaPlacar();
+        setFlag('A', 'base'); setFlag('B', 'base');
+        restaurarMuros();
+        EU.carregando = '';
+        if (player) setFlagVisual(player, '');
+        v.style.display = 'none';
+        guerraAtiva = true;
+        trackPresenca();
+      }, 8000);
+    }
+  }
+}
+
+/* ═══════ CHAT ═══════ */
+const meuBalao = { sprite: null, timer: 0 };
+function mostrarBalao(alvo, msg){
+  const holder = alvo ? alvo.grupo : player;
+  if (alvo && alvo.balao) holder.remove(alvo.balao);
+  if (!alvo && meuBalao.sprite) holder.remove(meuBalao.sprite);
+  const s = spriteBalao(msg);
+  holder.add(s);
+  if (alvo){ alvo.balao = s; alvo.balaoTimer = performance.now() + BUBBLE_MS; }
+  else { meuBalao.sprite = s; meuBalao.timer = performance.now() + BUBBLE_MS; }
+}
+function filtrar(msg){
+  let limpo = msg;
+  for (const p of PALAVRAS_BLOQUEADAS)
+    limpo = limpo.replace(new RegExp(p, 'gi'), '★'.repeat(p.length));
+  return limpo;
+}
+function feed(nome, turma, msg, evento = false){
+  const f = document.getElementById('feed');
+  const d = document.createElement('div');
+  d.className = 'feed-msg' + (evento ? ' evento' : '');
+  d.innerHTML = `<b class="${turma}">${esc(nome)}:</b> ${esc(msg)}`;
+  f.appendChild(d);
+  while (f.children.length > 6) f.removeChild(f.firstChild);
+  setTimeout(() => d.remove(), 12000);
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function enviarChat(){
+  const inp = document.getElementById('chatInput');
+  const bruto = inp.value.trim();
+  if (!bruto) return;
+  inp.value = '';
+  inp.blur();
+  const msg = filtrar(bruto).slice(0, 120);
+  mostrarBalao(null, msg);
+  feed(EU.nome + ' (você)', EU.turma, msg);
+  broadcast('chat', { id: EU.id, nome: EU.nome, turma: EU.turma, msg });
+  if (sb){
+    const { error } = await sb.from(CHAT_TABLE).insert({
+      nome: EU.nome + (EU.adm ? ' [ADM]' : ''), turma: EU.turma, mensagem: bruto,
+      pos_x: +pos.x.toFixed(1), pos_z: +pos.z.toFixed(1)
+    });
+    if (error) console.warn('Falha ao registrar log:', error.message);
+  }
+}
+document.getElementById('btnEnviar').addEventListener('click', enviarChat);
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ enviarChat(); e.preventDefault(); }
+  if (e.key === 'Escape') e.target.blur();
+});
+
+/* ═══════ BARRA ADM ═══════ */
+function admBtnState(){
+  document.querySelectorAll('.adm-btn').forEach(b => {
+    if (b.dataset.a === 'noclip') b.classList.toggle('on', noclip);
+    if (b.dataset.a === 'sprint') b.classList.toggle('on', sprintToggle);
+  });
+}
+document.querySelectorAll('.adm-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    const a = b.dataset.a;
+    if (a === 'tpA') tp(-80, 0);
+    if (a === 'tpC') tp(0, 0);
+    if (a === 'tpB') tp(80, 0);
+    if (a === 'noclip'){ noclip = !noclip; toast(noclip ? '👻 Atravessar: ON' : '👻 Atravessar: OFF'); }
+    if (a === 'sprint'){ sprintToggle = !sprintToggle; toast(sprintToggle ? '⚡ Correr: ON' : '⚡ Correr: OFF'); }
+    if (a === 'muros'){ restaurarMuros(); toast('🧱 Muralhas restauradas!'); }
+    admBtnState();
+  });
+});
+
+/* ═══════ ENTRADA ═══════ */
+let turmaSel = EU.turma || '';
+document.querySelectorAll('.turma-btn').forEach(b => {
+  if (b.dataset.t === turmaSel) b.classList.add('sel');
+  b.addEventListener('click', () => {
+    turmaSel = b.dataset.t;
+    document.querySelectorAll('.turma-btn').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel');
+  });
+});
+document.getElementById('inNome').value = EU.nome;
+document.getElementById('inAura').value = EU.aura;
+/* Patch 9.14 — indicador visual: personagem + EGOs vindos do FARME */
+if (PONTE && PONTE.v >= 1){
+  const nota = document.createElement('div');
+  nota.style.cssText = 'margin-top:12px;padding:10px;border:1px solid var(--verde);border-radius:10px;background:rgba(61,214,140,.08);font-size:12px;color:var(--verde);text-align:left';
+  const egosTxt = (EU.egosFarme && EU.egosFarme.length)
+    ? '<div style="margin-top:5px;color:var(--texto)">🎒 EGOs na mochila: ' + EU.egosFarme.map(e => (e.emoji||'✦')+' '+e.name).join(' · ') + '</div>'
+    : '';
+  nota.innerHTML = '✅ <b>Personagem do FARME carregado!</b>' +
+    (EU.char ? ' Seu visual 3D entra com você.' : ' (Crie seu visual 3D no painel do aluno → 🧍 Personagem 3D)') +
+    '<div style="margin-top:4px;color:var(--texto)">⚡ Aura: <b>' + EU.aura.toLocaleString('pt-BR') + '</b>' +
+    (PONTE.turma ? ' · 🏫 ' + PONTE.turma : '') + '</div>' + egosTxt;
+  document.getElementById('inAura').parentNode.appendChild(nota);
+  document.getElementById('inAura').readOnly = true;
+  document.getElementById('inAura').style.opacity = '.6';
+  document.getElementById('inAura').title = 'Aura vem automaticamente do FARME';
+}
+document.getElementById('btnEntrar').addEventListener('click', iniciar);
+document.getElementById('inNome').addEventListener('keydown', e => { if (e.key==='Enter') iniciar(); });
+if (EU.nome && EU.turma && qs.get('nome')) iniciar();
+
+function toast(t){
+  const el = document.getElementById('toast');
+  el.textContent = t; el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 4000);
+}
+
+let rodando = false;
+function iniciar(){
+  if (rodando) return;
+  let nomeDigitado = (document.getElementById('inNome').value.trim() || EU.nome || 'Aluno').slice(0, 20);
+  EU.turma = turmaSel || EU.turma || 'A';
+  if (!turmaSel && !qs.get('turma')){ toast('Escolha sua turma!'); return; }
+  EU.aura = Math.max(0, parseInt(document.getElementById('inAura').value || EU.aura) || 0);
+  rodando = true;
+
+  EU.adm = (PONTE && PONTE.adm === true) || djb2(nomeDigitado.toLowerCase()) === ADM_HASH;
+  montarTimerHud();
+  if (EU.adm) montarPainelAdm();
+  EU.nome = EU.adm ? ADM_NOME : nomeDigitado;
+  if (EU.adm) EU.aura = 99999;
+
+  EU.maxHp = 100 + Math.min(60, Math.floor(EU.aura / 200));
+  EU.hp = EU.maxHp;
+
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('hudNome').textContent = EU.nome;
+  const bt = document.getElementById('hudTurma');
+  bt.textContent = 'TURMA ' + EU.turma; bt.className = 'badge-turma ' + EU.turma;
+  if (EU.adm){
+    document.getElementById('hudAdm').style.display = 'inline-block';
+    document.getElementById('admbar').style.display = 'flex';
+  }
+  atualizaHpHud();
+  atualizaPlacar();
+  montarHotbar();
+
+  pos.x = EU.turma === 'A' ? -72 : 72;
+  pos.z = (Math.random() - 0.5) * 10;
+  cam.yaw = EU.turma === 'A' ? -Math.PI/2 : Math.PI/2;
+
+  player = criarAvatar(EU.turma, EU.adm, EU.char);
+  meuSprite = spriteInfo(EU.nome, EU.turma, EU.adm);
+  player.add(meuSprite);
+  player.position.set(pos.x, 0, pos.z);
+  scene.add(player);
+  selecionarArma(0);
+
+  conectar();
+  toast(EU.adm
+    ? '👑 ADM ativo (você aparece como "Chris") · todas as armas liberadas · ESPAÇO golpeia, SHIFT pula'
+    : (ONLINE_MODE ? `À guerra, ${EU.nome}! ESPAÇO golpeia · derrube a muralha, roube a bandeira!`
+                   : `Modo offline — treine nos bonecos em frente ao castelo (ESPAÇO golpeia), ${EU.nome}!`));
+  atualizaOnline();
+}
+
+/* ═══════ LOOP ═══════ */
+const clock = new THREE.Clock();
+function animar(){
+  requestAnimationFrame(animar);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = performance.now();
+
+  // portões
+  for (const p of portoes){
+    let abrir = false;
+    if (player && !EU.morto){
+      const d = Math.hypot(pos.x - p.gx, pos.z - p.gz);
+      if (d < 7 && (EU.adm || EU.turma === p.turma)) abrir = true;
+    }
+    if (!abrir) outros.forEach(o => {
+      if (o.morto) return;
+      if (o.turma === p.turma || o.adm){
+        const d = Math.hypot(o.grupo.position.x - p.gx, o.grupo.position.z - p.gz);
+        if (d < 7) abrir = true;
+      }
+    });
+    p.mesh.position.y = THREE.MathUtils.lerp(p.mesh.position.y, abrir ? p.abertoY : p.fechadoY, dt * 4);
+  }
+
+  if (player){
+    let andando = false;
+    if (!EU.morto){
+      let ix = 0, iz = 0;
+      if (teclas['w'] || teclas['arrowup'])    iz -= 1;
+      if (teclas['s'] || teclas['arrowdown'])  iz += 1;
+      if (teclas['a'] || teclas['arrowleft'])  ix -= 1;
+      if (teclas['d'] || teclas['arrowright']) ix += 1;
+      ix += joy.dx; iz += joy.dz;
+      const len = Math.hypot(ix, iz);
+      if (len > 0.18){
+        ix /= Math.max(len, 1); iz /= Math.max(len, 1);
+        const fX = -Math.sin(cam.yaw), fZ = -Math.cos(cam.yaw);
+        const rX = -Math.cos(cam.yaw), rZ = Math.sin(cam.yaw);
+        let dx = fX * -iz + -rX * ix;
+        let dz = fZ * -iz + -rZ * ix;
+        const dlen = Math.hypot(dx, dz) || 1;
+        dx /= dlen; dz /= dlen;
+        let v = VEL;
+        if (EU.adm && sprintToggle) v *= 2;
+        if (EU.carregando) v *= 0.8;
+        const nx = pos.x + dx * v * dt;
+        const nz = pos.z + dz * v * dt;
+        if (!colide(nx, pos.z)) pos.x = nx; else tentarEmpurrar(nx, pos.z, 'x');
+        if (!colide(pos.x, nz)) pos.z = nz; else tentarEmpurrar(pos.x, nz, 'z');
+        pos.ry = Math.atan2(dx, dz);
+        moveuDesdeUltimoTick = true;
+        andando = true;
+      }
+      if (vy !== 0 || pos.y > 0){
+        vy -= 32 * dt;
+        pos.y = Math.max(0, pos.y + vy * dt);
+        if (pos.y === 0) vy = 0;
+        moveuDesdeUltimoTick = true;
+      }
+    }
+
+    player.position.set(pos.x, pos.y, pos.z);
+    let dr = pos.ry - player.rotation.y;
+    while (dr >  Math.PI) dr -= Math.PI*2;
+    while (dr < -Math.PI) dr += Math.PI*2;
+    player.rotation.y += dr * 0.3;
+
+    const m = player.userData.membros;
+    const atacando = t < player.userData.atacaAte;
+    const sw = andando ? Math.sin(t * 0.012) * 0.7 : 0;
+    m.pE.rotation.x =  sw; m.pD.rotation.x = -sw;
+    m.bE.rotation.x = -sw;
+    m.bD.rotation.x = atacando ? -2.1 : sw;
+
+    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    const alvoCam = new THREE.Vector3(
+      pos.x + Math.sin(cam.yaw) * cp * cam.dist,
+      pos.y + sp * cam.dist + 2,
+      pos.z + Math.cos(cam.yaw) * cp * cam.dist);
+    camera.position.lerp(alvoCam, 0.3);
+    camera.lookAt(pos.x, pos.y + 2.2, pos.z);
+
+    if (meuBalao.sprite && t > meuBalao.timer){
+      player.remove(meuBalao.sprite); meuBalao.sprite = null;
+    }
+    loopBandeiras(t);
+
+    // mira: vermelha quando há alvo no alcance da arma atual
+    const arma = ARMAS[EU.arma];
+    const alcanceMira = arma.tipo === 'arco' ? 30 : (arma.alcance || 2.5);
+    const alvo = EU.morto ? null : alvoNaMira(alcanceMira);
+    document.getElementById('mira').classList.toggle('alvo', !!alvo);
+  }
+
+  // bonecos de treino renascem
+  for (const b of bonecos){
+    if (b.morto && t > b.renasceEm){
+      b.morto = false;
+      b.hp = b.maxHp;
+      b.grupo.rotation.x = 0;
+      redesenhaBoneco(b);
+    }
+  }
+
+  // projéteis
+  for (let i = projeteis.length - 1; i >= 0; i--){
+    const pr = projeteis[i];
+    pr.vy -= 9 * dt;
+    pr.mesh.position.x += pr.vx * dt;
+    pr.mesh.position.y += pr.vy * dt;
+    pr.mesh.position.z += pr.vz * dt;
+    let remover = false;
+    if (pr.mesh.position.y <= 0.1 || t - pr.nasceu > 2600) remover = true;
+    const px = pr.mesh.position.x, pz = pr.mesh.position.z, py = pr.mesh.position.y;
+    // muralhas: flecha causa dano (só quem atirou registra)
+    if (!remover && py < 7){
+      for (const mu of muros){
+        if (mu.destruido) continue;
+        if (px > mu.x - mu.sx/2 && px < mu.x + mu.sx/2 && pz > mu.z - mu.sz/2 && pz < mu.z + mu.sz/2){
+          if (pr.comDano && pr.deId === EU.id){
+            aplicaDanoMuro(mu.idx, ARMAS[2].danoMuro);
+            broadcast('muro', { idx: mu.idx, dano: ARMAS[2].danoMuro });
+            marcarAcerto();
+          }
+          remover = true; break;
+        }
+      }
+      // demais sólidos (torres etc.)
+      if (!remover) for (const c of colisores)
+        if (c.ativo && px > c.x1 && px < c.x2 && pz > c.z1 && pz < c.z2){ remover = true; break; }
+    }
+    // bonecos de treino
+    if (!remover && pr.comDano && pr.deId === EU.id){
+      for (const b of bonecos){
+        if (b.morto) continue;
+        if (Math.hypot(b.x - px, b.z - pz) < 1.0 && Math.abs(py - 1.8) < 2){
+          danoBoneco(b, ARMAS[2].dano);
+          marcarAcerto();
+          remover = true; break;
+        }
+      }
+    }
+    // jogadores inimigos
+    if (!remover && pr.comDano && pr.deId === EU.id){
+      outros.forEach((o, id) => {
+        if (remover || o.morto || o.turma === EU.turma) return;
+        const d = Math.hypot(o.grupo.position.x - px, o.grupo.position.z - pz);
+        const dy = Math.abs((o.grupo.position.y + 1.6) - py);
+        if (d < 1.1 && dy < 2.2){
+          broadcast('hit', { alvo: id, dano: ARMAS[2].dano, de: EU.id, deNome: EU.nome });
+          flashGrupo(o.grupo);
+          popupDano(o.grupo.position.x, 3, o.grupo.position.z, '-' + ARMAS[2].dano, '#ff8a8d');
+          marcarAcerto();
+          remover = true;
+        }
+      });
+    }
+    if (remover){ scene.remove(pr.mesh); projeteis.splice(i, 1); }
+  }
+
+  // popups de dano sobem e somem
+  for (let i = popups.length - 1; i >= 0; i--){
+    const p = popups[i];
+    const idade = t - p.nasceu;
+    p.sp.position.y += dt * 1.6;
+    p.sp.material.opacity = Math.max(0, 1 - idade / 800);
+    if (idade > 800){ scene.remove(p.sp); popups.splice(i, 1); }
+  }
+
+  // outros jogadores
+  outros.forEach(o => {
+    const g = o.grupo;
+    g.position.x = THREE.MathUtils.lerp(g.position.x, o.alvo.x, 0.18);
+    g.position.y = THREE.MathUtils.lerp(g.position.y, o.alvo.y || 0, 0.18);
+    g.position.z = THREE.MathUtils.lerp(g.position.z, o.alvo.z, 0.18);
+    let dr2 = o.alvo.ry - g.rotation.y;
+    while (dr2 >  Math.PI) dr2 -= Math.PI*2;
+    while (dr2 < -Math.PI) dr2 += Math.PI*2;
+    g.rotation.y += dr2 * 0.18;
+    const movendo = Math.hypot(g.position.x - o.alvo.x, g.position.z - o.alvo.z) > 0.08;
+    const m2 = g.userData.membros;
+    const atacando2 = t < g.userData.atacaAte;
+    const sw2 = movendo ? Math.sin(t * 0.012 + o.fase) * 0.7 : 0;
+    m2.pE.rotation.x = sw2; m2.pD.rotation.x = -sw2;
+    m2.bE.rotation.x = -sw2;
+    m2.bD.rotation.x = atacando2 ? -2.1 : sw2;
+    if (o.balao){
+      const d = Math.hypot(g.position.x - pos.x, g.position.z - pos.z);
+      o.balao.visible = d <= RAIO_CHAT;
+      if (t > o.balaoTimer){ g.remove(o.balao); o.balao = null; }
+    }
+  });
+
+  scene.traverse(o => { if (o.userData.nuvem){
+    o.position.x += o.userData.nuvem * dt;
+    if (o.position.x > 110) o.position.x = -110;
+  }});
+
+  renderer.render(scene, camera);
+}
+animar();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
