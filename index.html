@@ -42,6 +42,11 @@
   --glow-purple:0 0 20px rgba(139,92,246,0.35);
   /* PATCH 9.5 — Cartoon A+C */
   --ink:#0d0a1f; --cream:#fff8ec; --pink:#ff6b9d;
+  /* BLOCO 5 — PALETA DAS 4 ERAS INDUSTRIAIS (status por era da Vila) */
+  --era1:#a07a3d; --era1b:#6a512c; --era1bg:rgba(160,122,61,.12);   /* Vapor (BETINHA) */
+  --era2:#e0a92e; --era2b:#9a7420; --era2bg:rgba(224,169,46,.12);   /* Elétrica (FARMANDO) */
+  --era3:#3fb89e; --era3b:#1f6e60; --era3bg:rgba(63,184,158,.12);   /* Automação (ALPHA) */
+  --era4:#a78bfa; --era4b:#6d4fd8; --era4bg:rgba(167,139,250,.14);  /* Digital (SIGMA) */
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 /* Font size scale - controlled by JS via --fs-base */
@@ -908,6 +913,85 @@ input, textarea, select{ font-size:14px; }
 
 <!-- LOGIN -->
 <div id="login-screen">
+  <!-- BLOCO 5 visual: cenário das 4 Revoluções Industriais ao fundo -->
+  <div id="login-eras-bg" style="position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none">
+    <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;opacity:.5">
+      <defs>
+        <linearGradient id="skyEras" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a1438"/>
+          <stop offset="50%" stop-color="#241a4a"/>
+          <stop offset="100%" stop-color="#14102a"/>
+        </linearGradient>
+        <linearGradient id="era1g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8a6d3b"/><stop offset="100%" stop-color="#5a4424"/></linearGradient>
+        <linearGradient id="era2g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c9962e"/><stop offset="100%" stop-color="#8a6420"/></linearGradient>
+        <linearGradient id="era3g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b9e8f"/><stop offset="100%" stop-color="#1f6e60"/></linearGradient>
+        <linearGradient id="era4g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7c5cfc"/><stop offset="100%" stop-color="#4a34a8"/></linearGradient>
+      </defs>
+      <rect width="1440" height="900" fill="url(#skyEras)"/>
+      <!-- estrelas -->
+      <g fill="#fff" opacity=".5">
+        <circle cx="200" cy="120" r="1.5"/><circle cx="480" cy="80" r="1"/><circle cx="760" cy="140" r="1.5"/>
+        <circle cx="1040" cy="90" r="1"/><circle cx="1300" cy="130" r="1.5"/><circle cx="900" cy="60" r="1"/>
+        <circle cx="340" cy="200" r="1"/><circle cx="1180" cy="180" r="1.2"/><circle cx="620" cy="170" r="1"/>
+      </g>
+      <!-- chão -->
+      <rect y="640" width="1440" height="260" fill="#0f0a22"/>
+      <!-- ERA 1 — Vapor (chaminés a fumaça) -->
+      <g>
+        <rect x="80" y="440" width="240" height="200" fill="url(#era1g)"/>
+        <rect x="120" y="360" width="34" height="90" fill="#6a512c"/>
+        <rect x="180" y="340" width="34" height="110" fill="#6a512c"/>
+        <rect x="240" y="380" width="30" height="70" fill="#6a512c"/>
+        <circle cx="137" cy="350" r="20" fill="#cfc4d8" opacity=".4"><animate attributeName="cy" values="350;320;350" dur="4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".4;.1;.4" dur="4s" repeatCount="indefinite"/></circle>
+        <circle cx="197" cy="330" r="22" fill="#cfc4d8" opacity=".4"><animate attributeName="cy" values="330;295;330" dur="5s" repeatCount="indefinite"/><animate attributeName="opacity" values=".4;.1;.4" dur="5s" repeatCount="indefinite"/></circle>
+        <rect x="110" y="500" width="30" height="40" fill="#3a2c18"/><rect x="170" y="500" width="30" height="40" fill="#3a2c18"/><rect x="230" y="500" width="30" height="40" fill="#3a2c18"/>
+        <text x="200" y="680" text-anchor="middle" fill="#8a6d3b" font-family="Orbitron,monospace" font-size="22" font-weight="900">1ª · VAPOR</text>
+      </g>
+      <!-- ERA 2 — Elétrica (postes e luz) -->
+      <g>
+        <rect x="420" y="400" width="220" height="240" fill="url(#era2g)"/>
+        <rect x="450" y="430" width="40" height="50" fill="#fff3c4" opacity=".7"><animate attributeName="opacity" values=".7;.3;.7" dur="2s" repeatCount="indefinite"/></rect>
+        <rect x="510" y="430" width="40" height="50" fill="#fff3c4" opacity=".7"><animate attributeName="opacity" values=".3;.7;.3" dur="2.3s" repeatCount="indefinite"/></rect>
+        <rect x="570" y="430" width="40" height="50" fill="#fff3c4" opacity=".7"><animate attributeName="opacity" values=".7;.3;.7" dur="1.8s" repeatCount="indefinite"/></rect>
+        <rect x="450" y="510" width="40" height="50" fill="#fff3c4" opacity=".6"/><rect x="510" y="510" width="40" height="50" fill="#fff3c4" opacity=".6"/><rect x="570" y="510" width="40" height="50" fill="#fff3c4" opacity=".6"/>
+        <line x1="640" y1="380" x2="660" y2="640" stroke="#5a4420" stroke-width="6"/>
+        <text x="530" y="680" text-anchor="middle" fill="#c9962e" font-family="Orbitron,monospace" font-size="22" font-weight="900">2ª · ELÉTRICA</text>
+      </g>
+      <!-- ERA 3 — Automação (engrenagens) -->
+      <g>
+        <rect x="740" y="420" width="220" height="220" fill="url(#era3g)"/>
+        <g transform="translate(820,360)">
+          <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="8s" repeatCount="indefinite"/>
+            <circle r="34" fill="none" stroke="#5dcaa5" stroke-width="10"/>
+            <g fill="#5dcaa5"><rect x="-5" y="-44" width="10" height="14"/><rect x="-5" y="30" width="10" height="14"/><rect x="-44" y="-5" width="14" height="10"/><rect x="30" y="-5" width="14" height="10"/></g>
+          </g>
+        </g>
+        <g transform="translate(890,410)">
+          <g><animateTransform attributeName="transform" type="rotate" from="360 0 0" to="0 0 0" dur="6s" repeatCount="indefinite"/>
+            <circle r="26" fill="none" stroke="#3b9e8f" stroke-width="8"/>
+            <g fill="#3b9e8f"><rect x="-4" y="-34" width="8" height="12"/><rect x="-4" y="22" width="8" height="12"/><rect x="-34" y="-4" width="12" height="8"/><rect x="22" y="-4" width="12" height="8"/></g>
+          </g>
+        </g>
+        <text x="850" y="680" text-anchor="middle" fill="#3b9e8f" font-family="Orbitron,monospace" font-size="22" font-weight="900">3ª · AUTOMAÇÃO</text>
+      </g>
+      <!-- ERA 4 — Digital (circuitos e dados) -->
+      <g>
+        <rect x="1060" y="400" width="240" height="240" fill="url(#era4g)"/>
+        <g stroke="#a78bfa" stroke-width="3" fill="none" opacity=".8">
+          <path d="M1090 460 H1150 V510 H1210"><animate attributeName="stroke-dasharray" values="0 200;200 0" dur="3s" repeatCount="indefinite"/></path>
+          <path d="M1270 450 V520 H1180"><animate attributeName="stroke-dasharray" values="200 0;0 200" dur="3.5s" repeatCount="indefinite"/></path>
+        </g>
+        <g fill="#c9b8ff">
+          <circle cx="1090" cy="460" r="6"><animate attributeName="opacity" values="1;.3;1" dur="1.5s" repeatCount="indefinite"/></circle>
+          <circle cx="1210" cy="510" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+          <circle cx="1270" cy="450" r="6"><animate attributeName="opacity" values="1;.3;1" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="1180" cy="560" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.8s" repeatCount="indefinite"/></circle>
+        </g>
+        <text x="1180" y="680" text-anchor="middle" fill="#a78bfa" font-family="Orbitron,monospace" font-size="22" font-weight="900">4ª · DIGITAL</text>
+      </g>
+    </svg>
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 50% 50%, transparent, rgba(20,16,42,.85))"></div>
+  </div>
   <!-- Calvão flutuando acima da caixa de login -->
   <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:999">
     <div style="position:relative;width:380px">
@@ -916,10 +1000,20 @@ input, textarea, select{ font-size:14px; }
         onerror="this.style.display='none'" onclick="trocarGifLogin()">
     </div>
   </div>
-  <div class="login-box">
+  <div class="login-box" style="position:relative;z-index:10">
     <div class="login-logo">
       <div class="lt" id="login-disc-title">FARME AURA</div>
       <div class="ls">Ascensão Territorial</div>
+      <!-- mini-trilha das 4 eras -->
+      <div style="display:flex;justify-content:center;gap:6px;margin-top:10px">
+        <span style="font-size:9px;color:#8a6d3b;font-family:'Orbitron',monospace;font-weight:700">⚙️VAPOR</span>
+        <span style="color:#4a4470">›</span>
+        <span style="font-size:9px;color:#c9962e;font-family:'Orbitron',monospace;font-weight:700">💡ELÉTRICA</span>
+        <span style="color:#4a4470">›</span>
+        <span style="font-size:9px;color:#3b9e8f;font-family:'Orbitron',monospace;font-weight:700">🔧AUTO</span>
+        <span style="color:#4a4470">›</span>
+        <span style="font-size:9px;color:#a78bfa;font-family:'Orbitron',monospace;font-weight:700">🤖DIGITAL</span>
+      </div>
     </div>
     <div class="role-tabs">
       <div class="role-tab active" onclick="setRole('professor')">Professor</div>
@@ -1724,8 +1818,40 @@ function consumeDiamond(aluno){ return consumeHeart(aluno); }
 // PATCH 9.7 — MODO LIVRE: desativa a trava de corações (ideal fim de bimestre).
 // Flag guardada DENTRO do calvaoPacote — única JSONB do prof que já está na
 // whitelist do save-profile E já chega ao aluno no login. Zero mudança no backend.
+// FARME v2: identifica a "semana atual" do farme.
+// A semana reseta toda SEGUNDA-FEIRA às 7h da manhã (horário de Brasília, UTC-3).
+// Retorna uma string tipo "2026-W26" usada como chave dos contadores de aula.
+function farmeSemanaAtual(){
+  const agora = new Date();
+  // converte para horário de Brasília (UTC-3)
+  const brasilia = new Date(agora.getTime() - 3*3600000);
+  // recua até a última segunda 7h
+  const diaSemana = brasilia.getUTCDay(); // 0=dom,1=seg,...
+  const hora = brasilia.getUTCHours();
+  // quantos dias recuar para chegar na segunda
+  let diasDesdeSegunda = (diaSemana + 6) % 7; // seg=0, ter=1,... dom=6
+  // se for segunda mas antes das 7h, ainda conta como semana anterior
+  if(diaSemana === 1 && hora < 7) diasDesdeSegunda = 7;
+  else if(diaSemana !== 1){
+    // se ainda não passou das 7h no dia de início, ajuste não é necessário aqui
+  }
+  const inicioSemana = new Date(brasilia.getTime() - diasDesdeSegunda*86400000);
+  inicioSemana.setUTCHours(7,0,0,0);
+  // se estamos antes do início calculado, recua uma semana
+  if(brasilia.getTime() < inicioSemana.getTime()){
+    inicioSemana.setTime(inicioSemana.getTime() - 7*86400000);
+  }
+  // chave year-week
+  const ano = inicioSemana.getUTCFullYear();
+  const jan1 = new Date(Date.UTC(ano,0,1));
+  const semanaNum = Math.ceil((((inicioSemana - jan1)/86400000) + jan1.getUTCDay()+1)/7);
+  return `${ano}-W${String(semanaNum).padStart(2,'0')}`;
+}
+
 function coracoesDesativados(){
-  return !!(currentProf && currentProf.calvaoPacote && currentProf.calvaoPacote.coracoesDesativados);
+  // FARME v2: corações removidos — farme sempre livre (sem limite de corações).
+  // O limite agora é por AULA (2 acessos/aula/semana), não por corações.
+  return true;
 }
 
 // Verifica se há Calvão bloqueado por cola
@@ -1930,7 +2056,7 @@ function getXCount(aluno){
 // BACKEND CONFIG
 // ==============================
 // ⚠️ DEPLOY v2: troque a URL abaixo pela do seu Vercel novo (farme-aura-v2-api)
-const API_BASE = 'https://farme-aura-v2-api.vercel.app';
+const API_BASE = 'https://farme-aura-api-sigma.vercel.app';
 
 // ==============================
 // STATE
@@ -2036,8 +2162,10 @@ function eraDoAluno(x){
   return 1;
 }
 const STATUS_ERA   = {1:'BETINHA',2:'FARMANDO',3:'ALPHA',4:'SIGMA'};
-const COLOR_ERA    = {1:'#fc8181',2:'#6ee7b7',3:'#a78bfa',4:'#f0b429'};
-const BG_ERA       = {1:'rgba(229,62,62,.1)',2:'rgba(14,164,114,.12)',3:'rgba(124,92,252,.12)',4:'rgba(240,180,41,.12)'};
+const ERA_NOME     = {1:'Vapor',2:'Elétrica',3:'Automação',4:'Digital'};
+const ERA_EMOJI    = {1:'⚙️',2:'💡',3:'🔧',4:'🤖'};
+const COLOR_ERA    = {1:'#c79a4d',2:'#e0a92e',3:'#3fb89e',4:'#a78bfa'};
+const BG_ERA       = {1:'rgba(199,154,77,.12)',2:'rgba(224,169,46,.12)',3:'rgba(63,184,158,.12)',4:'rgba(167,139,250,.14)'};
 function auraColor(aluno){ return COLOR_ERA[eraDoAluno(aluno)]; }
 // auraColorVal: cor por VALOR numérico de aura (usada em médias/totais, não no status de era)
 function auraColorVal(v){
@@ -6299,7 +6427,46 @@ function openAlunoLog(login){
     : '<div class="empty">Nenhum registro de XP ainda. O aluno precisa farmar com o Calvão!</div>';
 
   document.getElementById('aluno-log-title').textContent = `📋 Log de XP — ${a.nome}`;
-  document.getElementById('aluno-log-content').innerHTML = html;
+
+  // FARME v2 — RELATÓRIO DE FARM POR AULA (o que e quanto o aluno farmou)
+  const semanaAtual = farmeSemanaAtual();
+  const aulasUsadas = a.aulasUsadas || {};
+  const farmHist = a.farmHistorico || [];
+  // conta usos por aula NA SEMANA ATUAL
+  const usosSemana = {};
+  Object.keys(aulasUsadas).forEach(k=>{
+    if(k.startsWith(semanaAtual+'_aula')){
+      const aula = k.split('_aula')[1];
+      usosSemana[aula] = aulasUsadas[k];
+    }
+  });
+  // histórico total por aula (todas as semanas)
+  const totalPorAula = {};
+  farmHist.forEach(h=>{ totalPorAula[h.aula] = (totalPorAula[h.aula]||0)+1; });
+
+  const numAulas = (DB.turmas.find(x=>x.id===CTid)?.aulasSemanais)||2;
+  let aulasHTML = '';
+  for(let i=1;i<=numAulas;i++){
+    const semana = usosSemana[i]||0;
+    const total = totalPorAula[i]||0;
+    const cor = semana>=2?'var(--red2)':semana===1?'var(--gold)':'var(--muted)';
+    aulasHTML += `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(124,92,252,.05);border-radius:6px;margin-bottom:5px">
+      <div style="font-size:18px">📚</div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:600">Aula ${i}</div>
+        <div style="font-size:10px;color:var(--muted)">Total farmado: ${total}×</div>
+      </div>
+      <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:${cor}">${semana}/2</div>
+      <div style="font-size:9px;color:var(--muted);width:48px;text-align:right">esta semana</div>
+    </div>`;
+  }
+  const farmReportHTML = `<div style="background:rgba(124,92,252,.08);border:1px solid var(--purple2);border-radius:var(--r);padding:12px;margin-bottom:14px">
+    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--purple2);margin-bottom:8px">⚡ Farm por Aula — Semana ${semanaAtual}</div>
+    ${aulasHTML}
+    <div style="font-size:9px;color:var(--muted);margin-top:6px">Limite: 2 acessos por aula/semana · reset toda segunda 7h</div>
+  </div>`;
+
+  document.getElementById('aluno-log-content').innerHTML = farmReportHTML + html;
   openM('m-aluno-log');
 }
 
@@ -6897,59 +7064,20 @@ function openDL(){
 // ALUNO APP
 // ==============================
 function renderAlunoApp(){
+  const eraAtual = eraDoAluno(CU);
   document.getElementById('bw').innerHTML=`
-    <div class="aluno-app a-wrap">
+    <div class="aluno-app a-wrap" data-era="${eraAtual}">
       <div class="a-side-overlay" id="a-side-overlay" onclick="toggleASidebarMobile(false)"></div>
       <div class="aluno-side a-side" id="a-side"></div>
       <div class="aluno-main a-content">
-        <!-- PATCH 9.3 — SVG holofotes Copa do Mundo -->
-        <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:.7" preserveAspectRatio="xMidYMid slice" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
-          <!-- holofote esquerdo -->
-          <defs>
-            <radialGradient id="hl" cx="50%" cy="0%" r="80%">
-              <stop offset="0%" stop-color="#fffde0" stop-opacity=".13"/>
-              <stop offset="100%" stop-color="#fffde0" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="hr" cx="50%" cy="0%" r="80%">
-              <stop offset="0%" stop-color="#fffde0" stop-opacity=".11"/>
-              <stop offset="100%" stop-color="#fffde0" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="gc" cx="50%" cy="100%" r="60%">
-              <stop offset="0%" stop-color="#2d7a4a" stop-opacity=".18"/>
-              <stop offset="100%" stop-color="#2d7a4a" stop-opacity="0"/>
-            </radialGradient>
-          </defs>
-          <ellipse cx="130" cy="0" rx="220" ry="320" fill="url(#hl)"/>
-          <ellipse cx="670" cy="0" rx="220" ry="320" fill="url(#hr)"/>
-          <!-- brilho grama central -->
-          <ellipse cx="400" cy="600" rx="300" ry="120" fill="url(#gc)"/>
-          <!-- linhas de grama verticais sutis -->
-          <line x1="100" y1="0" x2="100" y2="600" stroke="#1a4a2a" stroke-width="1" opacity=".25"/>
-          <line x1="220" y1="0" x2="220" y2="600" stroke="#1a4a2a" stroke-width="1" opacity=".2"/>
-          <line x1="340" y1="0" x2="340" y2="600" stroke="#1a4a2a" stroke-width="1" opacity=".18"/>
-          <line x1="460" y1="0" x2="460" y2="600" stroke="#1a4a2a" stroke-width="1" opacity=".18"/>
-          <line x1="580" y1="0" x2="580" y2="600" stroke="#1a4a2a" stroke-width="1" opacity=".2"/>
-          <line x1="700" y1="0" x2="700" y2="600" stroke="#1a4a2a" stroke-width="1" opacity=".25"/>
-          <!-- linha central do campo -->
-          <line x1="0" y1="300" x2="800" y2="300" stroke="#1d5a35" stroke-width="1" opacity=".2"/>
-          <!-- círculo central -->
-          <circle cx="400" cy="300" r="80" fill="none" stroke="#1d5a35" stroke-width="1" opacity=".2"/>
-          <circle cx="400" cy="300" r="3" fill="#1d5a35" opacity=".3"/>
-          <!-- arco de gol (topo) -->
-          <rect x="300" y="0" width="200" height="70" fill="none" stroke="#2a6a40" stroke-width="1.2" opacity=".22" rx="2"/>
-          <!-- arco de gol (base) -->
-          <rect x="300" y="530" width="200" height="70" fill="none" stroke="#2a6a40" stroke-width="1.2" opacity=".22" rx="2"/>
-        </svg>
-        <!-- Badge Copa -->
-        <div class="copa-badge">
-          <div class="copa-flag">
-            <span style="background:#009c3b"></span>
-            <span style="background:#fedf00"></span>
-            <span style="background:#009c3b"></span>
-          </div>
+        <!-- BLOCO 5 — Cenário de fundo que reflete a ERA atual do aluno -->
+        ${fundoEraSVG(eraAtual)}
+        <!-- Badge da Era atual -->
+        <div class="copa-badge" style="border-color:${COLOR_ERA[eraAtual]}">
+          <div style="font-size:26px">${ERA_EMOJI[eraAtual]}</div>
           <div>
-            <div class="copa-text">Em busca do Hexa</div>
-            <div class="copa-sub">FARME AURA · Copa do Mundo</div>
+            <div class="copa-text" style="color:${COLOR_ERA[eraAtual]}">${STATUS_ERA[eraAtual]}</div>
+            <div class="copa-sub">${eraAtual}ª Revolução · ${ERA_NOME[eraAtual]}</div>
           </div>
         </div>
         <button class="a-hamburger-float" onclick="toggleASidebarMobile()">☰ Menu</button>
@@ -6970,6 +7098,73 @@ function renderAlunoApp(){
   renderAContent();
   montarNavInferiorMobile();
   montarMascoteFlutuante();
+}
+
+// BLOCO 5 — gera o SVG de fundo conforme a era do aluno (vapor→elétrica→automação→digital)
+function fundoEraSVG(era){
+  const cor = COLOR_ERA[era];
+  const cenarios = {
+    1: `<g opacity=".5">
+        <rect x="80" y="380" width="180" height="220" fill="#6a512c" opacity=".5"/>
+        <rect x="110" y="300" width="26" height="80" fill="#5a4424"/><rect x="160" y="280" width="26" height="100" fill="#5a4424"/>
+        <circle cx="123" cy="290" r="16" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="290;260;290" dur="4s" repeatCount="indefinite"/></circle>
+        <circle cx="173" cy="270" r="18" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="270;235;270" dur="5s" repeatCount="indefinite"/></circle>
+        <rect x="560" y="400" width="160" height="200" fill="#6a512c" opacity=".4"/>
+        <rect x="600" y="340" width="24" height="60" fill="#5a4424"/>
+        <circle cx="612" cy="330" r="14" fill="#cfc4d8" opacity=".25"><animate attributeName="cy" values="330;300;330" dur="4.5s" repeatCount="indefinite"/></circle>
+      </g>`,
+    2: `<g opacity=".5">
+        <rect x="90" y="360" width="200" height="240" fill="#9a7420" opacity=".4"/>
+        <rect x="115" y="390" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="2s" repeatCount="indefinite"/></rect>
+        <rect x="170" y="390" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".2;.6;.2" dur="2.3s" repeatCount="indefinite"/></rect>
+        <rect x="225" y="390" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="1.8s" repeatCount="indefinite"/></rect>
+        <rect x="115" y="470" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="170" y="470" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="225" y="470" width="34" height="44" fill="#fff3c4" opacity=".5"/>
+        <rect x="560" y="400" width="160" height="200" fill="#9a7420" opacity=".35"/>
+        <rect x="585" y="430" width="30" height="40" fill="#fff3c4" opacity=".5"><animate attributeName="opacity" values=".5;.2;.5" dur="2.1s" repeatCount="indefinite"/></rect>
+      </g>`,
+    3: `<g opacity=".5">
+        <g transform="translate(180,360)">
+          <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="9s" repeatCount="indefinite"/>
+            <circle r="40" fill="none" stroke="#3fb89e" stroke-width="12" opacity=".5"/>
+            <g fill="#3fb89e" opacity=".5"><rect x="-6" y="-52" width="12" height="16"/><rect x="-6" y="36" width="12" height="16"/><rect x="-52" y="-6" width="16" height="12"/><rect x="36" y="-6" width="16" height="12"/></g>
+          </g>
+        </g>
+        <g transform="translate(270,420)">
+          <g><animateTransform attributeName="transform" type="rotate" from="360 0 0" to="0 0 0" dur="7s" repeatCount="indefinite"/>
+            <circle r="30" fill="none" stroke="#1f6e60" stroke-width="9" opacity=".5"/>
+            <g fill="#1f6e60" opacity=".5"><rect x="-5" y="-40" width="10" height="14"/><rect x="-5" y="26" width="10" height="14"/><rect x="-40" y="-5" width="14" height="10"/><rect x="26" y="-5" width="14" height="10"/></g>
+          </g>
+        </g>
+        <g transform="translate(620,430)">
+          <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="11s" repeatCount="indefinite"/>
+            <circle r="34" fill="none" stroke="#3fb89e" stroke-width="10" opacity=".35"/>
+          </g>
+        </g>
+      </g>`,
+    4: `<g opacity=".6">
+        <g stroke="#a78bfa" stroke-width="2.5" fill="none" opacity=".6">
+          <path d="M90 400 H180 V470 H280"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="3s" repeatCount="indefinite"/></path>
+          <path d="M360 380 V460 H260"><animate attributeName="stroke-dasharray" values="300 0;0 300" dur="3.5s" repeatCount="indefinite"/></path>
+          <path d="M560 420 H660 V480"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="4s" repeatCount="indefinite"/></path>
+        </g>
+        <g fill="#c9b8ff" opacity=".7">
+          <circle cx="90" cy="400" r="6"><animate attributeName="opacity" values="1;.3;1" dur="1.5s" repeatCount="indefinite"/></circle>
+          <circle cx="280" cy="470" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+          <circle cx="360" cy="380" r="6"><animate attributeName="opacity" values="1;.3;1" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="660" cy="480" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.8s" repeatCount="indefinite"/></circle>
+        </g>
+      </g>`
+  };
+  return `<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0" preserveAspectRatio="xMidYMid slice" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="eraGlow" cx="50%" cy="0%" r="90%">
+        <stop offset="0%" stop-color="${cor}" stop-opacity=".10"/>
+        <stop offset="100%" stop-color="${cor}" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="800" height="600" fill="url(#eraGlow)"/>
+    ${cenarios[era]||cenarios[1]}
+  </svg>`;
 }
 
 // PATCH 9.5 — Mascote Calvão flutuante (canto superior direito)
@@ -8085,9 +8280,9 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
       </div>`;
   }
   
-  // Grid de seleção de aulas
+  // Grid de seleção de aulas (FARME v2: contador semanal)
   const aulasUsadas = CU.aulasUsadas || {};
-  const bimKey = `bim${bimAtivo?.n || 1}`;
+  const bimKey = farmeSemanaAtual();
   const MAX_USOS = 2;
   
   // Monta grid de aulas
@@ -8170,19 +8365,27 @@ async function confirmStartMission(numAula){
     return;
   }
   
-  // PATCH 9.3 — Registra uso da aula no servidor ANTES de iniciar
+  // FARME v2 — Registra uso da aula no servidor ANTES de iniciar.
+  // O limite é 2 acessos POR AULA POR SEMANA (reset segunda 7h Brasília).
   if(numAula){
-    const bimAtivo = getBimAtivo();
-    const bimKey = `bim${bimAtivo?.n || 1}`;
-    const key = `${bimKey}_aula${numAula}`;
+    const semana = farmeSemanaAtual();
+    const key = `${semana}_aula${numAula}`;
     if(!CU.aulasUsadas) CU.aulasUsadas = {};
     const usos = (CU.aulasUsadas[key] || 0) + 1;
     if(usos > 2){
-      showNotif('🔒 Esta aula já foi usada 2 vezes. Escolha outra.');
+      showNotif('🔒 Esta aula já foi farmada 2 vezes esta semana. Escolha outra aula!');
       return;
     }
     CU.aulasUsadas[key] = usos;
     CU._aulaAtual = numAula; // Calvão vai receber essa info
+    // Registra no HISTÓRICO de farm (para o relatório do professor)
+    if(!CU.farmHistorico) CU.farmHistorico = [];
+    CU.farmHistorico.push({
+      aula: numAula, semana, ts: Date.now(),
+      data: new Date().toLocaleDateString('pt-BR')
+    });
+    // mantém os últimos 200 registros
+    if(CU.farmHistorico.length > 200) CU.farmHistorico = CU.farmHistorico.slice(-200);
     // Persiste no servidor AGORA
     try {
       await fetch(`${API_BASE}/api/student?action=update`,{
@@ -8190,7 +8393,7 @@ async function confirmStartMission(numAula){
         body: JSON.stringify({
           login: studentLogin||CU.login,
           senha: studentSenha||CU.senha,
-          patch: { aulasUsadas: CU.aulasUsadas }
+          patch: { aulasUsadas: CU.aulasUsadas, farmHistorico: CU.farmHistorico }
         })
       });
     } catch(e){ console.warn('persist aulaUsada:', e); }
@@ -10475,9 +10678,10 @@ function renderGlobalViewContent(todosAlunos){
   
   const totalAlunos = todosAlunos.length;
   const totalFiltrados = filtrados.length;
-  const mediaGeral = totalAlunos ? todosAlunos.reduce((s,a)=>s+parseAura(a.aura),0)/totalAlunos : 70;
-  const elites = todosAlunos.filter(a=>parseAura(a.aura)>=90).length;
-  const instavel = todosAlunos.filter(a=>parseAura(a.aura)<60).length;
+  const mediaGeral = totalAlunos ? todosAlunos.reduce((s,a)=>s+parseAura(a.aura),0)/totalAlunos : 0;
+  // contagem por era (status real do v2)
+  const elites = todosAlunos.filter(a=>eraDoAluno(a)===4).length;   // SIGMA (era 4)
+  const instavel = todosAlunos.filter(a=>eraDoAluno(a)===1).length; // BETINHA (era 1)
 
   // Pagination logic — usa filtrados
   const totalPages = Math.max(1, Math.ceil(totalFiltrados / GLOBAL_PER_PAGE));
@@ -10521,8 +10725,8 @@ function renderGlobalViewContent(todosAlunos){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px">
         <div class="card"><div class="card-t">Total de alunos</div><div class="card-v" style="font-size:28px">${totalAlunos}</div></div>
         <div class="card"><div class="card-t">Média geral de aura</div><div class="card-v" style="font-size:22px;color:${auraColorVal(mediaGeral)}">${fmtAura(mediaGeral)}</div></div>
-        <div class="card"><div class="card-t">Sigma (90+)</div><div class="card-v" style="font-size:28px;color:var(--gold)">${elites}</div></div>
-        <div class="card"><div class="card-t">Betinhas (<60)</div><div class="card-v" style="font-size:28px;color:var(--red2)">${instavel}</div></div>
+        <div class="card" style="border-color:${COLOR_ERA[4]}"><div class="card-t">${ERA_EMOJI[4]} Sigma · Era 4</div><div class="card-v" style="font-size:28px;color:${COLOR_ERA[4]}">${elites}</div></div>
+        <div class="card" style="border-color:${COLOR_ERA[1]}"><div class="card-t">${ERA_EMOJI[1]} Betinha · Era 1</div><div class="card-v" style="font-size:28px;color:${COLOR_ERA[1]}">${instavel}</div></div>
       </div>
 
       <!-- PATCH 9.2 — BUSCA DE ALUNOS -->
