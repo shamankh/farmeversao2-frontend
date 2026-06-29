@@ -367,7 +367,7 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 .inv-locked-mini{opacity:.3;}
 .aluno-app{display:flex;height:calc(100vh - 54px);min-height:0;overflow:hidden;}
 .aluno-main{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;}
-/* PATCH 9.3 — Fundo Copa do Mundo */
+/* BLOCO 5 — Fundo base (o cenário da era é desenhado por fundoEraSVG) */
 .aluno-main::before{
   content:'';
   position:absolute;
@@ -375,29 +375,8 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
   pointer-events:none;
   z-index:0;
   background:
-    repeating-linear-gradient(
-      90deg,
-      rgba(15,42,28,.0) 0px,
-      rgba(15,42,28,.0) 60px,
-      rgba(10,30,20,.35) 60px,
-      rgba(10,30,20,.35) 120px
-    ),
-    linear-gradient(180deg, #0d1f14 0%, #0a1a10 60%, #081510 100%);
-}
-/* Arco do gol no fundo */
-.aluno-main::after{
-  content:'';
-  position:absolute;
-  bottom:0;
-  left:50%;
-  transform:translateX(-50%);
-  width:220px;
-  height:90px;
-  border:2px solid rgba(45,120,70,.18);
-  border-bottom:none;
-  border-radius:4px 4px 0 0;
-  pointer-events:none;
-  z-index:0;
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(124,92,252,.06), transparent 70%),
+    linear-gradient(180deg, #181433 0%, #141228 55%, #0f0c22 100%);
 }
 .aluno-tabs,.aluno-content{position:relative;z-index:1;}
 /* PATCH 9.4 — Navegação na sidebar do aluno */
@@ -2525,9 +2504,6 @@ function renderProfHomeContent(){
     '<button class="btn btn-sm" onclick="openConfigHorario()">⚙️ '+(horarioConfigurado?'Editar Horário':'Configurar Horário')+'</button>'+
     '<button class="btn btn-sm" onclick="openMessagesProf()" style="border-color:rgba(124,92,252,.3);color:var(--purple2);position:relative">💬 Mensagens<span id="msg-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red2);color:#fff;font-size:9px;padding:2px 5px;border-radius:8px;font-weight:700"></span></button>'+
     (farmeEleganteAtivo()?('<button class="btn btn-sm" onclick="openFeCaixa()" style="border-color:rgba(255,107,157,.5);color:#ff6b9d;position:relative">📬 FE<span id="fe-badge" style="'+(()=>{const n=(DB.turmas||[]).reduce((s,t)=>s+(Array.isArray(t.messagesProf)?t.messagesProf.filter(m=>m&&m.type==="farme-elegante"&&!m.feHandled).length:0),0);return n>0?'':'display:none;'})()+'position:absolute;top:-4px;right:-4px;background:#ff6b9d;color:#fff;font-size:9px;padding:2px 5px;border-radius:8px;font-weight:700">'+(()=>{const n=(DB.turmas||[]).reduce((s,t)=>s+(Array.isArray(t.messagesProf)?t.messagesProf.filter(m=>m&&m.type==="farme-elegante"&&!m.feHandled).length:0),0);return n||'';})()+'</span></button>'):'') +
-    '<button class="btn btn-sm" onclick="toggleCoracoesDesativados()" style="border-color:'+(coracoesDesativados()?'rgba(74,222,128,.55)':'rgba(124,92,252,.35)')+';color:'+(coracoesDesativados()?'var(--green2)':'var(--purple2)')+'">'+(coracoesDesativados()?'♾️ Modo Livre: ON':'♾️ Modo Livre: OFF')+'</button>'+
-
-    '<button class="btn btn-sm" onclick="resetCoracoesGlobal()" style="border-color:rgba(252,129,129,.3);color:#fc8181">❤️ Reset Global de Corações</button>'+
     '</div>'+
     '</div>';
 
@@ -7103,26 +7079,45 @@ function renderAlunoApp(){
 // BLOCO 5 — gera o SVG de fundo conforme a era do aluno (vapor→elétrica→automação→digital)
 function fundoEraSVG(era){
   const cor = COLOR_ERA[era];
+  // base comum: linha do solo + campos cultivados (setor PRIMÁRIO) presente em todas as eras
+  const solo = `
+    <rect x="0" y="540" width="800" height="60" fill="#0d0a22" opacity=".6"/>
+    <g opacity=".25">
+      <path d="M0 545 Q 40 535 80 545 T 160 545 T 240 545 T 320 545" stroke="#3fb89e" stroke-width="2" fill="none"/>
+      <path d="M480 548 Q 520 538 560 548 T 640 548 T 720 548 T 800 548" stroke="#3fb89e" stroke-width="2" fill="none"/>
+    </g>`;
   const cenarios = {
+    // ERA 1 — VAPOR · economia primária→secundária nascente (fazenda + 1ª fábrica)
     1: `<g opacity=".5">
-        <rect x="80" y="380" width="180" height="220" fill="#6a512c" opacity=".5"/>
-        <rect x="110" y="300" width="26" height="80" fill="#5a4424"/><rect x="160" y="280" width="26" height="100" fill="#5a4424"/>
-        <circle cx="123" cy="290" r="16" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="290;260;290" dur="4s" repeatCount="indefinite"/></circle>
-        <circle cx="173" cy="270" r="18" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="270;235;270" dur="5s" repeatCount="indefinite"/></circle>
-        <rect x="560" y="400" width="160" height="200" fill="#6a512c" opacity=".4"/>
-        <rect x="600" y="340" width="24" height="60" fill="#5a4424"/>
-        <circle cx="612" cy="330" r="14" fill="#cfc4d8" opacity=".25"><animate attributeName="cy" values="330;300;330" dur="4.5s" repeatCount="indefinite"/></circle>
+        <!-- setor primário: plantação -->
+        <g opacity=".4" stroke="#6a8a3d" stroke-width="3" fill="none">
+          <path d="M500 530 V500 M520 530 V498 M540 530 V502 M560 530 V496 M580 530 V500 M600 530 V498 M620 530 V502 M640 530 V500"/>
+        </g>
+        <!-- setor secundário: primeira fábrica a vapor -->
+        <rect x="100" y="380" width="180" height="160" fill="#6a512c" opacity=".55"/>
+        <rect x="130" y="300" width="26" height="80" fill="#5a4424"/><rect x="180" y="280" width="26" height="100" fill="#5a4424"/>
+        <circle cx="143" cy="290" r="16" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="290;255;290" dur="4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".3;.08;.3" dur="4s" repeatCount="indefinite"/></circle>
+        <circle cx="193" cy="270" r="18" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="270;230;270" dur="5s" repeatCount="indefinite"/><animate attributeName="opacity" values=".3;.08;.3" dur="5s" repeatCount="indefinite"/></circle>
+        <rect x="120" y="450" width="30" height="40" fill="#3a2c18"/><rect x="175" y="450" width="30" height="40" fill="#3a2c18"/><rect x="230" y="450" width="30" height="40" fill="#3a2c18"/>
       </g>`,
+    // ERA 2 — ELÉTRICA · indústria a pleno (setor secundário forte) + comércio surgindo
     2: `<g opacity=".5">
-        <rect x="90" y="360" width="200" height="240" fill="#9a7420" opacity=".4"/>
-        <rect x="115" y="390" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="2s" repeatCount="indefinite"/></rect>
-        <rect x="170" y="390" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".2;.6;.2" dur="2.3s" repeatCount="indefinite"/></rect>
-        <rect x="225" y="390" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="1.8s" repeatCount="indefinite"/></rect>
-        <rect x="115" y="470" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="170" y="470" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="225" y="470" width="34" height="44" fill="#fff3c4" opacity=".5"/>
-        <rect x="560" y="400" width="160" height="200" fill="#9a7420" opacity=".35"/>
-        <rect x="585" y="430" width="30" height="40" fill="#fff3c4" opacity=".5"><animate attributeName="opacity" values=".5;.2;.5" dur="2.1s" repeatCount="indefinite"/></rect>
+        <!-- setor secundário: fábricas elétricas iluminadas -->
+        <rect x="90" y="340" width="200" height="200" fill="#9a7420" opacity=".45"/>
+        <rect x="115" y="370" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="2s" repeatCount="indefinite"/></rect>
+        <rect x="170" y="370" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".2;.6;.2" dur="2.3s" repeatCount="indefinite"/></rect>
+        <rect x="225" y="370" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="1.8s" repeatCount="indefinite"/></rect>
+        <rect x="115" y="445" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="170" y="445" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="225" y="445" width="34" height="44" fill="#fff3c4" opacity=".5"/>
+        <!-- poste elétrico -->
+        <line x1="330" y1="320" x2="330" y2="540" stroke="#5a4420" stroke-width="5"/><line x1="305" y1="340" x2="355" y2="340" stroke="#5a4420" stroke-width="4"/>
+        <!-- setor terciário: loja/comércio surgindo -->
+        <rect x="560" y="430" width="140" height="110" fill="#8a6420" opacity=".4"/>
+        <rect x="575" y="450" width="110" height="26" fill="#e0a92e" opacity=".5"/>
+        <text x="630" y="470" text-anchor="middle" fill="#fff8d0" font-size="14" opacity=".6">🏪</text>
       </g>`,
+    // ERA 3 — AUTOMAÇÃO · maquinário + logística (secundário automatizado + terciário cresce)
     3: `<g opacity=".5">
+        <!-- engrenagens (automação industrial) -->
         <g transform="translate(180,360)">
           <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="9s" repeatCount="indefinite"/>
             <circle r="40" fill="none" stroke="#3fb89e" stroke-width="12" opacity=".5"/>
@@ -7135,13 +7130,15 @@ function fundoEraSVG(era){
             <g fill="#1f6e60" opacity=".5"><rect x="-5" y="-40" width="10" height="14"/><rect x="-5" y="26" width="10" height="14"/><rect x="-40" y="-5" width="14" height="10"/><rect x="26" y="-5" width="14" height="10"/></g>
           </g>
         </g>
-        <g transform="translate(620,430)">
-          <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="11s" repeatCount="indefinite"/>
-            <circle r="34" fill="none" stroke="#3fb89e" stroke-width="10" opacity=".35"/>
-          </g>
-        </g>
+        <!-- setor terciário: centro comercial / serviços -->
+        <rect x="540" y="400" width="180" height="140" fill="#1f6e60" opacity=".35"/>
+        <rect x="560" y="420" width="40" height="120" fill="#3fb89e" opacity=".3"/><rect x="610" y="420" width="40" height="120" fill="#3fb89e" opacity=".3"/><rect x="660" y="420" width="40" height="120" fill="#3fb89e" opacity=".3"/>
+        <!-- caminhão de logística -->
+        <text x="430" y="510" font-size="28" opacity=".5">🚚</text>
       </g>`,
+    // ERA 4 — DIGITAL · economia do conhecimento (terciário/quaternário, dados, serviços digitais)
     4: `<g opacity=".6">
+        <!-- circuitos / fluxo de dados -->
         <g stroke="#a78bfa" stroke-width="2.5" fill="none" opacity=".6">
           <path d="M90 400 H180 V470 H280"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="3s" repeatCount="indefinite"/></path>
           <path d="M360 380 V460 H260"><animate attributeName="stroke-dasharray" values="300 0;0 300" dur="3.5s" repeatCount="indefinite"/></path>
@@ -7153,6 +7150,11 @@ function fundoEraSVG(era){
           <circle cx="360" cy="380" r="6"><animate attributeName="opacity" values="1;.3;1" dur="2s" repeatCount="indefinite"/></circle>
           <circle cx="660" cy="480" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.8s" repeatCount="indefinite"/></circle>
         </g>
+        <!-- arranha-céus de vidro (cidade digital) -->
+        <g opacity=".3">
+          <rect x="480" y="360" width="50" height="180" fill="#6d4fd8"/><rect x="540" y="320" width="50" height="220" fill="#7c5cfc"/><rect x="600" y="390" width="50" height="150" fill="#6d4fd8"/>
+          <g fill="#c9b8ff" opacity=".5"><rect x="490" y="375" width="12" height="12"/><rect x="510" y="375" width="12" height="12"/><rect x="550" y="335" width="12" height="12"/><rect x="570" y="335" width="12" height="12"/></g>
+        </g>
       </g>`
   };
   return `<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0" preserveAspectRatio="xMidYMid slice" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
@@ -7163,6 +7165,7 @@ function fundoEraSVG(era){
       </radialGradient>
     </defs>
     <rect width="800" height="600" fill="url(#eraGlow)"/>
+    ${solo}
     ${cenarios[era]||cenarios[1]}
   </svg>`;
 }
@@ -7551,16 +7554,10 @@ function renderASide(){
         <div style="font-size:10px;color:var(--muted2);line-height:1.5">${hasSQ ? (sqLeft>0 ? `🎯 +2,000 aura por revisão (até ${sqLeft}x). Não consome corações.` : 'Você usou as 3 tentativas deste bimestre.') : 'Aguarde o professor publicar a atividade avaliativa.'}</div>
       </div>`;
       
-      // === CORAÇÕES + CALVÃO ===
+      // === CALVÃO SEMANAL (corações removidos no v2 — farme livre) ===
       html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Corações</span>
-          <span style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;color:#fc8181">${'❤️'.repeat(a.hearts)}${'🩶'.repeat(HEART_MAX-a.hearts)} ${a.hearts}/${HEART_MAX}</span>
-        </div>
-        <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">Reset: manual pelo professor</div>
-        ${blocked ? `<div style="margin-top:8px;padding:6px 10px;background:rgba(229,62,62,.15);border:1px solid var(--red2);border-radius:6px;font-size:11px;color:var(--red2);font-weight:700">🚫 Calvão bloqueado por ${getCalvaoBloqueioRestante(a)}h</div>` : ''}
-        
-        <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+        ${blocked ? `<div style="margin-bottom:8px;padding:6px 10px;background:rgba(229,62,62,.15);border:1px solid var(--red2);border-radius:6px;font-size:11px;color:var(--red2);font-weight:700">🚫 Calvão bloqueado por ${getCalvaoBloqueioRestante(a)}h</div>` : ''}
+        <div>
           <div style="display:flex;justify-content:space-between;margin-bottom:4px">
             <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Calvão esta semana</span>
             <span style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--purple2)">${fmtAura(calvaoEarned)}/${fmtAura(getWeeklyCalvaoCap())}</span>
@@ -8268,11 +8265,11 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
         <div style="font-size:56px;margin-bottom:14px">🎯</div>
         <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900;margin-bottom:8px">Pronto para farmar?</div>
         <div style="font-size:13px;color:var(--muted2);margin-bottom:6px;line-height:1.5;max-width:380px;margin-left:auto;margin-right:auto">
-          ${coracoesDesativados() ? '<strong style="color:var(--green2)">♾️ Modo livre:</strong> farme sem gastar corações' : 'Você vai gastar <strong style="color:var(--red2)">1 ❤️ coração</strong>'} e ganhar até <strong style="color:var(--gold)">4,000 aura</strong>.<br>
+          <strong style="color:var(--green2)">♾️ Farme livre:</strong> ganhe até <strong style="color:var(--gold)">4,000 aura</strong> por sessão.<br>
           A sessão dura <strong>25 minutos</strong>. Você pode pausar a qualquer momento.
         </div>
         <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin:14px 0 18px;font-size:12px;color:var(--muted)">
-          ${coracoesDesativados() ? '<span style="font-weight:700;color:var(--green2)">♾️ Corações ilimitados (modo livre)</span>' : `<span>Corações:</span><span style="font-size:16px;letter-spacing:2px">${'❤️'.repeat(CU.hearts||0)}${'🖤'.repeat(Math.max(0, HEART_MAX-(CU.hearts||0)))}</span><span style="font-weight:700;color:var(--text)">${CU.hearts||0}/${HEART_MAX}</span>`}
+          <span style="font-weight:700;color:var(--green2)">✓ Sem limite de tentativas · 2 acessos por aula/semana</span>
         </div>
         <button onclick="confirmStartMission(null)" style="background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;padding:14px 38px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:1px;box-shadow:0 4px 20px rgba(124,92,252,.4)">
           🚀 COMEÇAR A FARMAR
