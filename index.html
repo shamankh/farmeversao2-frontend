@@ -1183,7 +1183,7 @@ input, textarea, select{ font-size:14px; }
 <div class="modal-bg" id="m-gacha">
   <div class="modal" style="max-width:420px;text-align:center">
     <div class="modal-t" style="font-family:'Orbitron',monospace">🎰 GACHA</div>
-    <div class="modal-s">Cada pull consome 0,050 de aura. A cada 100 pulls acumulados, um EGO Divino é garantido!</div>
+    <div class="modal-s">Cada pull consome 1,000 de aura. A cada 100 pulls acumulados, um EGO Divino é garantido!</div>
     <div id="gacha-stats" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin:14px 0;text-align:left;font-size:13px">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Sua aura</span><span id="gacha-aura" style="font-weight:700"></span></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Total de pulls</span><span id="gacha-total" style="font-weight:700"></span></div>
@@ -1196,7 +1196,7 @@ input, textarea, select{ font-size:14px; }
     </div>
     <div class="modal-ft" style="justify-content:center;gap:10px">
       <button class="btn" onclick="closeM('m-gacha')">Fechar</button>
-      <button class="btn btn-p" id="gacha-pull-btn" onclick="doGachaPull()" style="font-weight:700">🎰 PULL (-0,050)</button>
+      <button class="btn btn-p" id="gacha-pull-btn" onclick="doGachaPull()" style="font-weight:700">🎰 PULL (-1,000)</button>
     </div>
   </div>
 </div>
@@ -7611,7 +7611,7 @@ function renderASide(){
         <div style="font-size:10px;color:var(--muted)">${gacha.totalPulls} pulls</div>
       </div>
       <button onclick="openGacha()" style="width:100%;background:linear-gradient(135deg,var(--purple),var(--gold));border:none;color:#fff;padding:10px;border-radius:var(--r);font-weight:700;font-family:'Orbitron',monospace;font-size:12px;cursor:pointer;letter-spacing:.5px">
-        PULL (-0,050)
+        PULL (-1,000)
       </button>
       <div style="margin-top:8px">
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px">
@@ -7841,7 +7841,7 @@ function refreshGachaStats(){
   } else {
     btn.disabled = false;
     btn.style.opacity = '1';
-    btn.textContent = '🎰 PULL (-0,050)';
+    btn.textContent = '🎰 PULL (-1,000)';
   }
 }
 
@@ -8744,7 +8744,7 @@ function renderLootContent(){
           <div style="font-size:12px;color:var(--muted2);margin-bottom:6px">${gacha.totalPulls} pulls · Divino garantido em ${pityLeft}</div>
           <div class="bar-track" style="height:6px"><div class="bar-fill" style="width:${pityPct}%;background:linear-gradient(90deg,var(--purple),var(--gold))"></div></div>
         </div>
-        <button onclick="openGacha()" class="btn btn-p" style="font-family:'Orbitron',monospace;font-weight:900;padding:14px 22px">🎰 PULL (-0,050)</button>
+        <button onclick="openGacha()" class="btn btn-p" style="font-family:'Orbitron',monospace;font-weight:900;padding:14px 22px">🎰 PULL (-1,000)</button>
       </div>
 
       <!-- BAGAGEM ATIVA -->
@@ -11159,39 +11159,40 @@ function siegeBannerAlunoHtml(){
 const SIEGE_URL = 'siege.html'; // hospede o siege NO MESMO repo/domínio (mesma origem = localStorage compartilhado)
 const WAR_URL   = 'war.html';   // FARME WAR (mantido por compat; o jogo agora é integrado via overlay)
 const C3D_DEFAULT = { pele:'#E8B88A', cabelo:'curto', corCabelo:'#3A2C1A', camisa:'#7C5CFC', calca:'#2C2546', acess:'nenhum',
-  olhos:'normal', nariz:'medio', orelha:'normal', boca:'sorriso', corpo:'normal', altura:'normal', genero:'masc' };
-// Tons de pele: SEMPRE todos liberados (identidade não se tranca atrás de tier)
-const C3D_PELES = ['#F6D7B8','#E8B88A','#C98E5E','#9C6B43','#6E4A2F','#4A3120'];
+  olhos:'normal', nariz:'medio', orelha:'normal', boca:'sorriso', corpo:'normal', altura:'normal', genero:'masc', barba:'nenhuma' };
+// v2: IDENTIDADE TOTALMENTE LIVRE — todas as opções liberadas (min:0)
+const C3D_PELES = ['#F6D7B8','#E8B88A','#C98E5E','#9C6B43','#6E4A2F','#4A3120','#F1C27D','#8D5524'];
 const C3D_CABELOS = [
   {id:'nenhum',label:'Calvão 👨‍🦲',min:0},{id:'curto',label:'Curto',min:0},{id:'espetado',label:'Espetado',min:0},
   {id:'cacheado',label:'Cacheado',min:0},{id:'franja',label:'Franja',min:0},
-  {id:'longo',label:'Longo',min:60},{id:'moicano',label:'Moicano',min:60},{id:'coque',label:'Coque',min:80}
+  {id:'longo',label:'Longo',min:0},{id:'moicano',label:'Moicano',min:0},{id:'coque',label:'Coque',min:0},
+  {id:'rabo',label:'Rabo de cavalo',min:0},{id:'chanel',label:'Chanel',min:0}
 ];
-/* v0.8 — rosto e corpo: identidade é livre, sem trava de tier */
-const C3D_GENERO = [{id:'masc',label:'Masculino',min:0},{id:'fem',label:'Feminino',min:0}];
+const C3D_GENERO = [{id:'masc',label:'♂️ Masculino',min:0},{id:'fem',label:'♀️ Feminino',min:0}];
 const C3D_OLHOS  = [{id:'normal',label:'Normais',min:0},{id:'grandes',label:'Grandes',min:0},{id:'fechados',label:'Fechados 😌',min:0},{id:'ciliados',label:'Com cílios',min:0}];
 const C3D_NARIZ  = [{id:'pequeno',label:'Pequeno',min:0},{id:'medio',label:'Médio',min:0},{id:'grande',label:'Grande',min:0}];
 const C3D_ORELHA = [{id:'normal',label:'Normais',min:0},{id:'grande',label:'Grandes',min:0},{id:'elfo',label:'Elfo 🧝',min:0}];
-const C3D_BOCA   = [{id:'sorriso',label:'Sorriso 🙂',min:0},{id:'serio',label:'Sério 😐',min:0},{id:'surpreso',label:'Surpreso 😮',min:0}];
+const C3D_BOCA   = [{id:'sorriso',label:'Sorriso 🙂',min:0},{id:'serio',label:'Sério 😐',min:0},{id:'surpreso',label:'Surpreso 😮',min:0},{id:'sorrisao',label:'Sorrisão 😁',min:0}];
+const C3D_BARBA  = [{id:'nenhuma',label:'Sem barba',min:0},{id:'cavanhaque',label:'Cavanhaque',min:0},{id:'cheia',label:'Cheia',min:0},{id:'bigode',label:'Bigode',min:0}];
 const C3D_CORPO  = [{id:'magro',label:'Magro',min:0},{id:'normal',label:'Médio',min:0},{id:'forte',label:'Forte',min:0}];
 const C3D_ALTURA = [{id:'baixo',label:'Baixo',min:0},{id:'normal',label:'Médio',min:0},{id:'alto',label:'Alto',min:0}];
 const C3D_CORES_CABELO = [
   {c:'#1B1B1B',min:0},{c:'#3A2C1A',min:0},{c:'#6E4A2F',min:0},{c:'#C9A227',min:0},
-  {c:'#8B5CF6',min:60},{c:'#3DD68C',min:60},{c:'#FF6B9D',min:60}
+  {c:'#8B5CF6',min:0},{c:'#3DD68C',min:0},{c:'#FF6B9D',min:0},{c:'#E5484D',min:0},{c:'#2D9CDB',min:0}
 ];
 const C3D_CAMISAS = [
   {c:'#7C5CFC',min:0},{c:'#2D9CDB',min:0},{c:'#3DD68C',min:0},{c:'#E5484D',min:0},{c:'#FF6B9D',min:0},{c:'#5A5A68',min:0},
-  {c:'#14B8A6',min:60},{c:'#F97316',min:60},{c:'#111827',min:60},
-  {c:'#F0B429',min:90.001},{c:'#FFF8EC',min:90.001}
+  {c:'#14B8A6',min:0},{c:'#F97316',min:0},{c:'#111827',min:0},
+  {c:'#F0B429',min:0},{c:'#FFF8EC',min:0}
 ];
 const C3D_CALCAS = [
   {c:'#2C2546',min:0},{c:'#1F2937',min:0},{c:'#3A2C1A',min:0},{c:'#374151',min:0},
-  {c:'#7C5CFC',min:60},{c:'#E5484D',min:60},{c:'#F0B429',min:90.001}
+  {c:'#7C5CFC',min:0},{c:'#E5484D',min:0},{c:'#F0B429',min:0},{c:'#3DD68C',min:0}
 ];
 const C3D_ACESS = [
   {id:'nenhum',label:'Nenhum',min:0},
-  {id:'oculos',label:'Óculos 🕶️',min:80},{id:'bone',label:'Boné 🧢',min:80},
-  {id:'halo',label:'Halo ✨',min:90.001},{id:'coroa',label:'Coroa 👑',min:90.001}
+  {id:'oculos',label:'Óculos 🕶️',min:0},{id:'bone',label:'Boné 🧢',min:0},
+  {id:'halo',label:'Halo ✨',min:0},{id:'coroa',label:'Coroa 👑',min:0}
 ];
 const c3dTierNome = m => m>=90.001?'SIGMA':m>=80?'ALPHA':m>=60?'FARMANDO':'BETINHA';
 const c3dLivre = m => ((CU&&CU.aura)||0) >= (m||0);
@@ -11217,25 +11218,37 @@ function c3dBuildAvatar(T, ch){
   const W = ({ magro: 0.82, forte: 1.26 })[ch.corpo] || 1;
   const FEM = ch.genero === 'fem';
   const H = ({ baixo: 0.88, alto: 1.12 })[ch.altura] || 1;
+  // pernas (fem: quadril mais largo, pernas mais juntas em cima)
   for (const lado of [-1, 1]){
-    const p = new T.Group(); p.position.set(0.17*lado*W, 1.18, 0); g.add(p);
-    add(new T.CapsuleGeometry(0.125, 0.72, 4, 10), mCalca, 0, -0.5, 0, p);
+    const p = new T.Group(); p.position.set((FEM?0.15:0.17)*lado*W, 1.18, 0); g.add(p);
+    add(new T.CapsuleGeometry((FEM?0.135:0.125), 0.72, 4, 10), mCalca, 0, -0.5, 0, p);
     add(new T.BoxGeometry(0.26, 0.15, 0.44), mSapato, 0, -0.98, 0.07, p);
   }
-  add(new T.SphereGeometry(0.36, 14, 12), mCalca, 0, 1.25, 0).scale.set((FEM?1.22:1.05)*W, 0.62, (FEM?0.84:0.78)*W);
+  // QUADRIL — fem bem mais largo e arredondado
+  add(new T.SphereGeometry(0.36, 16, 12), mCalca, 0, 1.25, 0).scale.set((FEM?1.38:1.05)*W, (FEM?0.7:0.62), (FEM?0.92:0.78)*W);
+  // TRONCO — fem afunilado (ombro estreito → cintura fina), masc reto e largo
   const tronco = add(new T.CapsuleGeometry(0.34, 0.5, 6, 14), mCam, 0, 1.82, 0);
-  tronco.scale.set((FEM?0.92:1.06)*W, 1, (FEM?0.66:0.74)*W);
+  tronco.scale.set((FEM?0.86:1.08)*W, 1, (FEM?0.64:0.76)*W);
   if (FEM){
-    // cintura marcada + ombros mais estreitos
-    add(new T.CylinderGeometry(0.3*W, 0.34*W, 0.3, 14), mCam, 0, 1.55, 0).scale.set(1, 1, 0.74);
-    // busto sutil
-    for (const lx of [-1, 1]) add(new T.SphereGeometry(0.13, 10, 8), mCam, 0.14*W*lx, 1.92, 0.16*W).scale.set(1, 0.85, 1);
+    // CINTURA bem marcada (estreita no meio)
+    add(new T.CylinderGeometry(0.27*W, 0.36*W, 0.34, 16), mCam, 0, 1.52, 0).scale.set(1, 1, 0.72);
+    // BUSTO mais definido
+    for (const lx of [-1, 1]){
+      add(new T.SphereGeometry(0.155, 12, 10), mCam, 0.135*W*lx, 1.93, 0.17*W).scale.set(1, 0.92, 1.05);
+    }
+    // ombros mais suaves (arredondados)
+    add(new T.SphereGeometry(0.16, 12, 10), mCam, 0, 2.05, 0).scale.set(1.5*W, 0.7, 0.7);
+  } else {
+    // MASC — ombros largos e peitoral
+    add(new T.SphereGeometry(0.18, 12, 10), mCam, 0, 2.06, 0).scale.set(1.85*W, 0.72, 0.78);
+    add(new T.BoxGeometry(0.5*W, 0.3, 0.34), mCam, 0, 1.92, 0.02).scale.set(1, 1, 1);
   }
-  add(new T.CylinderGeometry(0.37, 0.39, 0.13, 16), mat(0xF0B429), 0, 1.47, 0).scale.set((FEM?1.18:1)*W, 1, (FEM?1.05:1)*W); // cinto (no jogo: cor da turma)
+  add(new T.CylinderGeometry(0.37, 0.39, 0.13, 16), mat(0xF0B429), 0, 1.47, 0).scale.set((FEM?1.32:1)*W, 1, (FEM?1.1:1)*W); // cinto (no jogo: cor da turma)
+  // braços (fem: mais finos)
   for (const lado of [-1, 1]){
-    const b = new T.Group(); b.position.set((0.36 + 0.11*W)*lado*W, 2.1, 0); g.add(b);
-    add(new T.SphereGeometry(0.13, 10, 8), mCam, 0, 0, 0, b);
-    add(new T.CapsuleGeometry(0.095, 0.6, 4, 10), mCam, 0, -0.4, 0, b);
+    const b = new T.Group(); b.position.set((0.36 + 0.11*W)*lado*W*(FEM?0.92:1), 2.1, 0); g.add(b);
+    add(new T.SphereGeometry(FEM?0.115:0.13, 10, 8), mCam, 0, 0, 0, b);
+    add(new T.CapsuleGeometry(FEM?0.08:0.095, 0.6, 4, 10), mCam, 0, -0.4, 0, b);
     add(new T.SphereGeometry(0.105, 10, 8), mPele, 0, -0.78, 0, b);
   }
   add(new T.CylinderGeometry(0.1, 0.12, 0.16, 10), mPele, 0, 2.36, 0);
@@ -11279,9 +11292,29 @@ function c3dBuildAvatar(T, ch){
   } else if (tBoca === 'surpreso'){
     const oB = add(new T.TorusGeometry(0.05, 0.018, 6, 12), mat(0x9c4f4f), 0, 2.57, 0.3);
     oB.scale.set(0.8, 1, 1);
+  } else if (tBoca === 'sorrisao'){
+    // sorrisão aberto com dentes
+    const boca = add(new T.TorusGeometry(0.1, 0.028, 6, 14, Math.PI), mat(0x8c3f3f), 0, 2.585, 0.285);
+    boca.rotation.z = Math.PI; boca.rotation.x = -0.2;
+    add(new T.BoxGeometry(0.16, 0.045, 0.02), new T.MeshBasicMaterial({color:0xffffff}), 0, 2.6, 0.305);
   } else {
     const boca = add(new T.TorusGeometry(0.07, 0.018, 6, 12, Math.PI), mat(0x9c4f4f), 0, 2.59, 0.29);
     boca.rotation.z = Math.PI; boca.rotation.x = -0.15;
+  }
+  // BARBA (v2)
+  const tBarba = (ch && ch.barba) || 'nenhuma';
+  if (tBarba !== 'nenhuma'){
+    if (tBarba === 'bigode'){
+      add(new T.BoxGeometry(0.16, 0.03, 0.04), mCab, 0, 2.63, 0.3);
+    } else if (tBarba === 'cavanhaque'){
+      add(new T.BoxGeometry(0.08, 0.09, 0.04), mCab, 0, 2.49, 0.29);
+      add(new T.BoxGeometry(0.16, 0.03, 0.04), mCab, 0, 2.63, 0.3);
+    } else if (tBarba === 'cheia'){
+      // contorno do queixo e bochechas
+      const bb = add(new T.SphereGeometry(0.33, 14, 12, 0, Math.PI*2, Math.PI*0.55, Math.PI*0.45), mCab, 0, 2.66, 0.02);
+      bb.scale.set(0.96, 1.0, 0.96);
+      add(new T.BoxGeometry(0.16, 0.03, 0.04), mCab, 0, 2.63, 0.3);
+    }
   }
   const capCabelo = () => {
     const c = add(new T.SphereGeometry(0.365, 16, 12, 0, Math.PI*2, 0, Math.PI*0.55), mCab, 0, 2.76, -0.015);
@@ -11318,6 +11351,23 @@ function c3dBuildAvatar(T, ch){
     capCabelo();
     for (const cc of [[-0.2,3.0,0.12],[0.2,3.0,0.12],[0,3.07,-0.05],[-0.26,2.92,-0.18],[0.26,2.92,-0.18],[0,2.98,-0.3],[-0.1,3.06,0.02],[0.1,3.06,-0.12]])
       add(new T.SphereGeometry(0.12, 8, 6), mCab, cc[0], cc[1], cc[2]);
+  }
+  else if (cab === 'rabo'){
+    capCabelo();
+    // rabo de cavalo atrás
+    const rabo = add(new T.CapsuleGeometry(0.1, 0.55, 4, 10), mCab, 0, 2.5, -0.34);
+    rabo.scale.set(1, 1, 0.7); rabo.rotation.x = 0.25;
+    add(new T.SphereGeometry(0.12, 10, 8), mCab, 0, 2.92, -0.28); // prendedor
+  }
+  else if (cab === 'chanel'){
+    capCabelo();
+    // corte chanel: laterais retas até a altura do queixo
+    for (const lx of [-1, 1]){
+      const lado = add(new T.BoxGeometry(0.13, 0.42, 0.28), mCab, 0.31*lx, 2.55, 0.02);
+      lado.scale.set(1, 1, 1);
+    }
+    add(new T.BoxGeometry(0.5, 0.12, 0.12), mCab, 0, 2.93, 0.27); // franja reta
+    add(new T.BoxGeometry(0.62, 0.4, 0.2), mCab, 0, 2.6, -0.22); // volume atrás
   }
   if (ch.acess === 'oculos'){
     const mOc = new T.MeshBasicMaterial({ color: 0x14141c });
@@ -11394,6 +11444,7 @@ function c3dRenderOpts(){
     <div><div class="c3d-lbl">Nariz</div><div class="c3d-row">${chips(C3D_NARIZ,'nariz')}</div></div>
     <div><div class="c3d-lbl">Orelhas</div><div class="c3d-row">${chips(C3D_ORELHA,'orelha')}</div></div>
     <div><div class="c3d-lbl">Boca</div><div class="c3d-row">${chips(C3D_BOCA,'boca')}</div></div>
+    <div><div class="c3d-lbl">Barba</div><div class="c3d-row">${chips(C3D_BARBA,'barba')}</div></div>
     <div><div class="c3d-lbl">Corpo</div><div class="c3d-row">${chips(C3D_CORPO,'corpo')}</div></div>
     <div><div class="c3d-lbl">Altura</div><div class="c3d-row">${chips(C3D_ALTURA,'altura')}</div></div>
     <div><div class="c3d-lbl">Camisa</div><div class="c3d-row">${sw(C3D_CAMISAS,'camisa')}</div></div>
