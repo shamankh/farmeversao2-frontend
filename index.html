@@ -1811,9 +1811,6 @@ function farmeSemanaAtual(){
   let diasDesdeSegunda = (diaSemana + 6) % 7; // seg=0, ter=1,... dom=6
   // se for segunda mas antes das 7h, ainda conta como semana anterior
   if(diaSemana === 1 && hora < 7) diasDesdeSegunda = 7;
-  else if(diaSemana !== 1){
-    // se ainda não passou das 7h no dia de início, ajuste não é necessário aqui
-  }
   const inicioSemana = new Date(brasilia.getTime() - diasDesdeSegunda*86400000);
   inicioSemana.setUTCHours(7,0,0,0);
   // se estamos antes do início calculado, recua uma semana
@@ -6599,7 +6596,6 @@ function renderAulaTab(){
         <button class="btn btn-sm" onclick="setCTtab('horario')">🗓️ Configurar grade de horário</button>
         <button class="btn btn-sm" onclick="openResetAura()" style="border-color:rgba(229,62,62,.3);color:var(--red2)">🔄 Zerar / Resetar Aura</button>
         <button class="btn btn-sm" onclick="openSorteador()" style="border-color:rgba(124,92,252,.3);color:var(--purple2)">🎲 Sortear (chamada fria)</button>
-        <button class="btn btn-sm" onclick="resetCoracoesTurma()" style="border-color:rgba(252,129,129,.3);color:#fc8181">❤️ Resetar Corações da Turma</button>
         ${!aulaInfo?'<span style="font-size:11px;color:var(--muted);margin-left:12px">Nenhuma aula detectada agora nesta turma</span>':''}
       </div>
     </div>`;
@@ -7566,10 +7562,12 @@ function renderASide(){
         </div>
       </div>`;
       
-      // === BOTÃO LEILÃO ===
-      html += `<button onclick="abrirLeilaoAluno()" ${leilaoAtivo?'':'disabled'} style="width:100%;background:${leilaoAtivo?'linear-gradient(135deg,var(--purple),var(--gold))':'var(--bg3)'};border:1.5px solid ${leilaoAtivo?'var(--purple2)':'var(--border)'};color:${leilaoAtivo?'#fff':'var(--muted)'};padding:10px;border-radius:var(--r);font-weight:700;font-family:'Orbitron',monospace;font-size:12px;cursor:${leilaoAtivo?'pointer':'not-allowed'};letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:6px;${leilaoAtivo?'animation:pulse 2.5s infinite':''}">
-        🏁 ${leilaoAtivo ? 'LEILÃO ATIVO!' : 'Sem leilão'}
+      // === BOTÃO LEILÃO (v2: só aparece se houver leilão ativo) ===
+      if(leilaoAtivo){
+        html += `<button onclick="abrirLeilaoAluno()" style="width:100%;background:linear-gradient(135deg,var(--purple),var(--gold));border:1.5px solid var(--purple2);color:#fff;padding:10px;border-radius:var(--r);font-weight:700;font-family:'Orbitron',monospace;font-size:12px;cursor:pointer;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:6px;animation:pulse 2.5s infinite">
+        🏁 LEILÃO ATIVO!
       </button>`;
+      }
       
       // === BOTÃO MENSAGENS (PATCH 9.2) ===
       html += `<button onclick="openMessagesAluno()" style="width:100%;background:var(--bg3);border:1.5px solid var(--border);color:var(--purple2);padding:10px;border-radius:var(--r);font-weight:700;font-family:'Orbitron',monospace;font-size:12px;cursor:pointer;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:6px;position:relative">
@@ -8293,7 +8291,7 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
     const textoCor = bloqueada ? 'var(--red2)' : usos === 1 ? 'var(--gold)' : 'var(--purple2)';
     const status = bloqueada ? '🔒 2/2' : usos === 1 ? '⚠️ 1/2' : '✅ 0/2';
     gridHTML += `
-      <button onclick="${bloqueada ? 'showNotif(\"Esta aula já foi usada 2 vezes no bimestre.\")' : `selecionarAula(${i})`}"
+      <button onclick="${bloqueada ? 'showNotif(\"Esta aula já foi farmada 2x esta semana. Libera segunda às 7h!\")' : `selecionarAula(${i})`}"
         style="background:${cor};border:1.5px solid ${bordaCor};border-radius:var(--r);padding:12px 8px;cursor:${bloqueada?'not-allowed':'pointer'};text-align:center;transition:.15s;${bloqueada?'opacity:.6':''}">
         <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:${textoCor}">Aula ${i}</div>
         <div style="font-size:10px;color:${textoCor};margin-top:4px;font-weight:700">${status}</div>
@@ -8305,7 +8303,7 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-family:'Orbitron',monospace;font-size:16px;font-weight:900">📚 Escolha a aula</div>
-          <div style="font-size:12px;color:var(--muted2);margin-top:2px">Cada aula pode ser farmada até 2x no bimestre</div>
+          <div style="font-size:12px;color:var(--muted2);margin-top:2px">Cada aula pode ser farmada até 2x por semana (reset segunda 7h)</div>
         </div>
         <div style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">
           ${coracoesDesativados() ? '♾️ Modo livre' : `❤️ ${CU.hearts||0}/${HEART_MAX} corações`}
@@ -9250,9 +9248,9 @@ function startNewMission(){
   } else {
     // PATCH 9.3 — mensagem de abertura confirma a aula escolhida
     if(CU._aulaAtual){
-      intro = `Olá, ${CU.nome.split(' ')[0]}! Sou o Calvão de crIA. 🎯\n\nVocê escolheu a **Aula ${CU._aulaAtual}** para farmar hoje. Boa escolha!\n\n${coracoesDesativados() ? '♾️ Modo livre: farme à vontade (sem gastar corações).' : `Você tem ${CU.hearts} ❤️ corações esta semana.`}\n\nVamos focar no conteúdo da Aula ${CU._aulaAtual}. Me conta: o que você lembra sobre o tema dessa aula?`;
+      intro = `Olá, ${CU.nome.split(' ')[0]}! Sou o Calvão de crIA. 🎯\n\nVocê escolheu a **Aula ${CU._aulaAtual}** para farmar hoje. Boa escolha!\n\n${coracoesDesativados() ? '♾️ Farm livre: farme à vontade!' : `Você tem ${CU.hearts} ❤️ corações esta semana.`}\n\nVamos focar no conteúdo da Aula ${CU._aulaAtual}. Me conta: o que você lembra sobre o tema dessa aula?`;
     } else {
-      intro = `Olá, ${CU.nome.split(' ')[0]}. Sou o Calvão de crIA.\n\n${coracoesDesativados() ? '♾️ Modo livre: farme à vontade (sem gastar corações).' : `Você tem ${CU.hearts} ❤️ corações esta semana.`}\n\nHoje vamos trabalhar: ${tema}.\n\nMe conta: qual foi a última aula que ${profNome} passou? Pode ser o tema, algo que você lembra, ou um tópico que discutiram.`;
+      intro = `Olá, ${CU.nome.split(' ')[0]}. Sou o Calvão de crIA.\n\n${coracoesDesativados() ? '♾️ Farm livre: farme à vontade!' : `Você tem ${CU.hearts} ❤️ corações esta semana.`}\n\nHoje vamos trabalhar: ${tema}.\n\nMe conta: qual foi a última aula que ${profNome} passou? Pode ser o tema, algo que você lembra, ou um tópico que discutiram.`;
     }
     CU._currentIsSuperQuest = false;
     // RESERVA o coração (mas ainda não consome) — PULADO no modo livre
@@ -9664,27 +9662,37 @@ function renderRegrasContent(){
         <span style="font-size:11px;color:var(--muted);margin-left:8px">(cap em 5x = +1,000 aura)</span>
       </div>`:''}
 
-      <!-- AURA STATUS -->
+      <!-- AURA & STATUS POR ERA (FARME v2) -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-t">🎯 Sistema de Aura (máx. 100)</div>
+        <div class="card-t">🎯 Aura & Status por Era</div>
+        <div style="font-size:13px;color:var(--muted2);line-height:1.7;margin-bottom:10px">
+          Todo mundo começa com <strong>0,000 de aura</strong> — e ela <strong>não tem teto</strong>! Você ganha aura farmando com o Calvão, jogando as atividades e vendendo no mercado da sua Vila.
+          <br><br>
+          <strong>Seu status NÃO vem da aura</strong> — vem da <strong>Era da sua Vila</strong> no FARME WAR. Para evoluir de status, evolua a <strong>Indústria</strong> da sua Vila e avance pelas 4 Revoluções Industriais:
+        </div>
         <table class="rules-tbl">
-          <thead><tr><th>Faixa</th><th>Status</th><th>Desbloqueia</th></tr></thead>
+          <thead><tr><th>Era da Vila</th><th>Status</th><th>Época</th></tr></thead>
           <tbody>
-            <tr><td><span style="color:var(--gold);font-family:'Orbitron',monospace">90,001 – 100,000</span></td><td><span class="pill" style="background:rgba(240,180,41,.15);color:var(--gold)">SIGMA</span></td><td>EGOs Divinos</td></tr>
-            <tr><td><span style="color:var(--purple2);font-family:'Orbitron',monospace">80,000 – 90,000</span></td><td><span class="pill" style="background:rgba(124,92,252,.15);color:var(--purple2)">ALPHA</span></td><td>EGOs Lendários</td></tr>
-            <tr><td><span style="color:var(--green2);font-family:'Orbitron',monospace">60,000 – 80,000</span></td><td><span class="pill" style="background:rgba(14,164,114,.15);color:var(--green2)">FARMANDO</span></td><td>EGOs Raros</td></tr>
-            <tr><td><span style="color:var(--red2);font-family:'Orbitron',monospace">0 – 60,000</span></td><td><span class="pill" style="background:rgba(229,62,62,.15);color:var(--red2)">BETINHA</span></td><td>EGOs Comuns</td></tr>
+            <tr><td><span style="color:#a78bfa;font-family:'Orbitron',monospace">🤖 4ª Revolução</span></td><td><span class="pill" style="background:rgba(167,139,250,.15);color:#a78bfa">SIGMA</span></td><td>Digital — dados, IA, economia do conhecimento</td></tr>
+            <tr><td><span style="color:#3fb89e;font-family:'Orbitron',monospace">🔧 3ª Revolução</span></td><td><span class="pill" style="background:rgba(63,184,158,.15);color:#3fb89e">ALPHA</span></td><td>Automação — máquinas, logística, serviços</td></tr>
+            <tr><td><span style="color:#e0a92e;font-family:'Orbitron',monospace">💡 2ª Revolução</span></td><td><span class="pill" style="background:rgba(224,169,46,.15);color:#e0a92e">FARMANDO</span></td><td>Elétrica — fábricas, energia, comércio</td></tr>
+            <tr><td><span style="color:#c79a4d;font-family:'Orbitron',monospace">⚙️ 1ª Revolução</span></td><td><span class="pill" style="background:rgba(199,154,77,.15);color:#c79a4d">BETINHA</span></td><td>Vapor — do campo à primeira fábrica</td></tr>
           </tbody>
         </table>
+        <div style="background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.25);border-radius:var(--r);padding:8px 12px;margin-top:10px;font-size:12px;color:var(--purple2)">
+          💡 O fundo do seu painel muda conforme a sua era — sua tela evolui com você!
+        </div>
       </div>
 
-      <!-- CORAÇÕES (NOVO PATCH 9.0) -->
+      <!-- FARM LIVRE (FARME v2) -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-t">❤️ Sistema de Corações (3 por semana)</div>
+        <div class="card-t">♾️ Farm Livre + Limite por Aula</div>
         <div style="font-size:13px;color:var(--muted2);line-height:1.7">
-          Você tem <strong>3 corações por semana</strong> — cada um vale 1 sessão de até <strong>25 minutos</strong> com o Calvão.
+          O farme é <strong>livre</strong> — sem limite de tentativas! Cada sessão com o Calvão dura até <strong>25 minutos</strong>.
           <br><br>
-          • <strong>Reset:</strong> quando o professor clicar no botão de reset, você recebe 3 corações novos.
+          • <strong>Limite por aula:</strong> cada aula pode ser farmada até <strong>2× por semana</strong> — escolha bem e varie os conteúdos!
+          <br>
+          • <strong>Reset:</strong> toda <strong>segunda-feira às 7h</strong> (horário de Brasília) os contadores de aula zeram.
           <br>
           • <strong>Pausa:</strong> dá pra pausar a sessão e voltar depois — o tempo congela.
           <br>
@@ -9692,7 +9700,7 @@ function renderRegrasContent(){
           <br>
           • <strong>Cap semanal:</strong> máximo de <strong>${fmtAura(getWeeklyCalvaoCap())} aura</strong> ganhos via Calvão por semana.
           <br>
-          • <strong>Status atual:</strong> ${a.hearts}/${HEART_MAX} corações · ${fmtAura(calvaoEarned)} de ${fmtAura(getWeeklyCalvaoCap())} usado esta semana.
+          • <strong>Status atual:</strong> ${fmtAura(calvaoEarned)} de ${fmtAura(getWeeklyCalvaoCap())} usado esta semana.
         </div>
       </div>
 
@@ -9763,17 +9771,74 @@ function renderRegrasContent(){
         </table>
       </div>
 
-      <!-- LEILÃO -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-t">🏁 Sistema de Leilão</div>
+      <!-- FARME WAR — SUA VILA -->
+      <div class="card" style="margin-bottom:14px;border:1.5px solid rgba(139,92,246,.45);background:linear-gradient(135deg,rgba(124,92,252,.06),transparent)">
+        <div class="card-t" style="color:var(--purple2)">🏰 FARME WAR — Sua Vila</div>
         <div style="font-size:13px;color:var(--muted2);line-height:1.7">
-          Quando o professor abre um leilão na sua turma, o botão <strong>LEILÃO ATIVO!</strong> fica disponível na barra lateral.
+          Cada aluno tem uma <strong>Vila</strong> que evolui pelas 4 Revoluções Industriais. Acesse pela aba <strong>🏰 War</strong>.
           <br><br>
-          • <strong>Selado:</strong> você não vê o lance dos outros alunos.<br>
-          • <strong>Custo de participação:</strong> <strong>1,000 aura</strong> debitado ao dar o lance.<br>
-          • <strong>Se ganhar:</strong> o valor do lance é debitado A MAIS (total: 1,000 + valor lance).<br>
-          • <strong>Se perder:</strong> só perde os 1,000 de participação.<br>
-          • Quem ganha recebe o EGO com a duração que o professor configurou.
+          • <strong>Recursos:</strong> sua vila produz 15 recursos, e você tem <strong>3 recursos abundantes</strong> (produzem mais) sorteados pelo seu nome. Ninguém tem tudo — por isso existe o comércio!<br>
+          • <strong>Sua vila já nasce cheia:</strong> no primeiro acesso, o armazém vem com o estoque no máximo — fabrique, monte defesas e negocie desde o primeiro dia.<br>
+          • <strong>Produção por hora:</strong> os recursos produzem sozinhos, até <strong>72h</strong> acumuladas offline. O que passar da capacidade do armazém é <strong>perdido</strong> — visite sua vila com frequência!<br>
+          • <strong>Construções:</strong> ⛏️ Extração (produz mais), 📦 Armazém (guarda mais), 🏭 Indústria (fabrica itens e <strong>avança a sua Era</strong>) e 🚚 Transporte (carrega mais no mercado).<br>
+          • <strong>Upgrades custam recursos + aura</strong> — farme com o Calvão para evoluir!<br>
+          • <strong>Mercado:</strong> compre e venda recursos com alunos de <strong>todas as turmas</strong> — o mercado é real, entre pessoas.
+        </div>
+      </div>
+
+      <!-- DEFESA & ESCUDO -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-t">🛡️ Defesa da Vila & Escudo</div>
+        <div style="font-size:13px;color:var(--muted2);line-height:1.7">
+          Sua vila pode ser <strong>atacada por outros alunos</strong> — proteja seus recursos!
+          <br><br>
+          • <strong>Itens de defesa</strong> (fabricados na Indústria, custam só recursos): 🏹 Flechas (+2), 🪵 Barricada (+10), 🛢️ Óleo Fervente (+15), 🧱 Muralha (+25), 💣 Canhão (+60), 🗼 Torre Automática (+140).<br>
+          • <strong>Escudo</strong> (vem do Gacha): Básico dura <strong>24h</strong> (+50% de defesa) e Avançado dura <strong>72h</strong> (+100%). O escudo tem <strong>vida</strong> — absorve o dano primeiro e pode quebrar no meio da batalha.<br>
+          • Ao ser atacado, sua defesa total decide quanto o invasor consegue saquear.
+        </div>
+      </div>
+
+      <!-- EXÉRCITO & ATAQUES -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-t">⚔️ Exército & Ataques</div>
+        <div style="font-size:13px;color:var(--muted2);line-height:1.7">
+          Recrute tropas (uma por Era) e ataque outras vilas para <strong>saquear recursos</strong>:
+        </div>
+        <table class="rules-tbl" style="margin-top:10px">
+          <thead><tr><th>Tropa</th><th>Era</th><th>Ataque</th><th>Carga</th></tr></thead>
+          <tbody>
+            <tr><td>🪓 Milícia</td><td>1ª</td><td>15</td><td>20</td></tr>
+            <tr><td>🔫 Infantaria</td><td>2ª</td><td>50</td><td>60</td></tr>
+            <tr><td>🚜 Blindado</td><td>3ª</td><td>130</td><td>180</td></tr>
+            <tr><td>🛸 Drone</td><td>4ª</td><td>320</td><td>450</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size:13px;color:var(--muted2);line-height:1.7;margin-top:10px">
+          • A batalha compara seu <strong>poder de ataque</strong> com a <strong>defesa total</strong> do alvo (escudo absorve primeiro).<br>
+          • <strong>Tropas morrem dos dois lados</strong> — atacar tem custo, escolha bem o alvo!<br>
+          • O saque é <strong>limitado pela carga</strong> das tropas que sobreviverem.<br>
+          • Tudo é validado no servidor — sem trapaça. 😉
+        </div>
+      </div>
+
+      <!-- FARME SIEGE 3D -->
+      <div class="card" style="margin-bottom:14px;border:1.5px solid rgba(63,184,158,.45);background:linear-gradient(135deg,rgba(63,184,158,.06),transparent)">
+        <div class="card-t" style="color:#3fb89e">🏯 Farme Siege — Batalha 3D</div>
+        <div style="font-size:13px;color:var(--muted2);line-height:1.7">
+          Quando o professor ativa um <strong>Evento Siege</strong>, sua turma entra numa <strong>batalha 3D multiplayer</strong> de captura de castelo — sala contra sala, todo mundo jogando ao mesmo tempo!
+          <br><br>
+          • Seu <strong>Personagem 3D</strong> entra na batalha com a cor da sua turma no cinto.<br>
+          • Trabalhe em equipe: capturar o castelo exige coordenação da sala inteira.
+        </div>
+      </div>
+
+      <!-- PERSONAGEM 3D -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-t">👤 Personagem 3D</div>
+        <div style="font-size:13px;color:var(--muted2);line-height:1.7">
+          Crie seu avatar no botão <strong>Personagem 3D</strong> da barra lateral. Corpo masculino ou feminino, tons de pele, 10 estilos de cabelo, barba, olhos, boca, acessórios e cores de roupa.
+          <br><br>
+          💜 <strong>Identidade é livre:</strong> todas as opções estão desbloqueadas para todos, desde o primeiro dia. Seu personagem aparece no painel e nas batalhas Siege.
         </div>
       </div>
 
@@ -9781,7 +9846,7 @@ function renderRegrasContent(){
       <div class="card" style="margin-bottom:14px">
         <div class="card-t">🎒 Bagagem de EGOs</div>
         <div style="font-size:13px;color:var(--muted2);line-height:1.7">
-          Capacidade: <strong>6 slots</strong> (2 Betinha + 2 Raro + 1 Lendário + 1 Divino)
+          Capacidade: <strong>6 slots</strong> (2 Comum + 2 Raro + 1 Lendário + 1 Divino)
           <br><br>
           <strong>Expiração automática:</strong>
         </div>
@@ -9803,21 +9868,25 @@ function renderRegrasContent(){
       <div class="card" style="margin-bottom:14px">
         <div class="card-t">🎰 Gacha</div>
         <div style="font-size:13px;color:var(--muted2);line-height:1.7">
-          <strong>Custo:</strong> 0,050 aura por pull
+          <strong>Custo:</strong> 1,000 aura por pull
+          <br>
+          <strong>Todos os tiers estão sempre disponíveis</strong> — não importa a sua era, você pode tirar até um Divino de primeira!
+          <br><br>
+          Os EGOs têm <strong>função real</strong> em 4 famílias: 🤖 <strong>Calvão</strong> (boosts de farm), 🏰 <strong>Vila</strong> (produção e recursos), ⚔️ <strong>Guerra</strong> (escudos e ataque) e 💜 <strong>Social</strong> (interação entre alunos).
           <br><br>
           <strong>Probabilidades:</strong>
         </div>
         <table class="rules-tbl" style="margin-top:10px">
           <thead><tr><th>Tier</th><th>Chance</th></tr></thead>
           <tbody>
-            <tr><td><span style="color:#8a97b0;font-weight:700">BETINHA</span></td><td>60%</td></tr>
+            <tr><td><span style="color:#8a97b0;font-weight:700">COMUM</span></td><td>60%</td></tr>
             <tr><td><span style="color:#6ee7b7;font-weight:700">RARO</span></td><td>28%</td></tr>
             <tr><td><span style="color:#a78bfa;font-weight:700">LENDÁRIO</span></td><td>10%</td></tr>
             <tr><td><span style="color:#f0b429;font-weight:700">DIVINO</span></td><td>2%</td></tr>
           </tbody>
         </table>
         <div style="background:rgba(240,180,41,.08);border:1px solid rgba(240,180,41,.25);border-radius:var(--r);padding:8px 12px;margin-top:10px;font-size:12px;color:var(--gold)">
-          💎 <strong>Pity System:</strong> a cada 100 pulls acumulados, um EGO DIVINO é garantido! O contador não zera — continua somando.
+          💎 <strong>Pity System:</strong> a cada 100 pulls, um EGO DIVINO é garantido — e o contador recomeça do zero após o Divino.
         </div>
       </div>
 
