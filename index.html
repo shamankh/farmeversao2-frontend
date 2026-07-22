@@ -2513,6 +2513,10 @@ function renderProfApp(){
         <div class="tdot" style="background:var(--pink,#ff6b9d)"></div>
         <span style="font-size:12px">🎉 Eventos</span>
       </div>
+      <div class="t-tab" onclick="openCodigosProf()" style="margin:0 8px 4px">
+        <div class="tdot" style="background:var(--gold)"></div>
+        <span style="font-size:12px">🎟️ Códigos Resgate</span>
+      </div>
       <div class="t-tab" onclick="openExportar()" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--green)"></div>
         <span style="font-size:12px">📊 Exportar Dados</span>
@@ -5048,6 +5052,159 @@ const EVENTOS_CATALOGO = [
   { id:'pergunta-dia', emoji:'🎤', nome:'Pergunta Relâmpago', desc:'Você lança uma pergunta-bônus do dia; os 3 primeiros a acertar ganham aura extra.', status:'breve' },
   { id:'defesa-turma', emoji:'🛡️', nome:'Defesa da Turma', desc:'Evento cooperativo: a turma inteira precisa somar X aura na semana para "defender o castelo".', status:'breve' }
 ];
+
+// ══════════════════════════════════════════════════════════════════
+// CÓDIGOS RESGATÁVEIS (v2) — painel do professor
+// ══════════════════════════════════════════════════════════════════
+let _codigosCache = null;
+const fmtCod = c => c.slice(0,4)+'-'+c.slice(4,8)+'-'+c.slice(8,10);
+
+async function openCodigosProf(){
+  CTid = null; renderSB();
+  const main = document.getElementById('main-area');
+  main.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">Carregando códigos...</div>`;
+  try{
+    const data = await apiFetch('/api/db?action=codigos-listar', null, 'GET');
+    _codigosCache = data;
+    renderCodigosProf();
+  }catch(e){
+    main.innerHTML = `<div style="padding:40px;text-align:center;color:var(--red2)">Erro ao carregar: ${e.message}<br><br><span style="color:var(--muted);font-size:12px">Confirme que rodou o SQL-codigos-resgate.sql no Supabase.</span></div>`;
+  }
+}
+
+function renderCodigosProf(){
+  const main = document.getElementById('main-area');
+  const codigos = _codigosCache?.codigos || [];
+  const ranking = _codigosCache?.ranking || [];
+  // agrupa por lote
+  const lotes = {};
+  codigos.forEach(c => { (lotes[c.lote] = lotes[c.lote] || []).push(c); });
+  const nLotes = Object.keys(lotes).sort((a,b)=>b-a);
+
+  const NV_COR = n => n>=15?'var(--gold)' : n>=11?'var(--purple2)' : n>=6?'#3fb89e' : 'var(--muted2)';
+
+  let lotesHTML = '';
+  nLotes.forEach(lt => {
+    const cs = lotes[lt];
+    const resgatados = cs.filter(c=>c.resgatado_nome).length;
+    let rowsHTML = '';
+    cs.forEach(c => {
+      rowsHTML += `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 10px;font-family:'Orbitron',monospace;font-size:12px;font-weight:700;letter-spacing:1px">${fmtCod(c.codigo)}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:900;color:${NV_COR(c.nivel)}">Nv ${c.nivel}</td>
+        <td style="padding:6px 10px;font-size:12px">${c.premio?.label||''}</td>
+        <td style="padding:6px 10px;font-size:12px;${c.resgatado_nome?'color:var(--green2);font-weight:700':'color:var(--muted)'}">${c.resgatado_nome ? '✓ '+c.resgatado_nome : '— disponível'}</td>
+      </tr>`;
+    });
+    lotesHTML += `
+      <details style="margin-bottom:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden" ${lt===nLotes[0]?'open':''}>
+        <summary style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none">
+          <span style="font-family:'Orbitron',monospace;font-weight:900;font-size:14px">🎫 LOTE ${lt} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${cs.length} códigos</span></span>
+          <span style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:11px;color:${resgatados>0?'var(--green2)':'var(--muted)'};font-weight:700">${resgatados}/${cs.length} resgatados</span>
+            <button class="btn btn-sm" onclick="event.preventDefault();imprimirLote(${lt})" style="border-color:rgba(240,180,41,.4);color:var(--gold)">🖨️ Imprimir raspadinhas</button>
+          </span>
+        </summary>
+        <div style="max-height:420px;overflow-y:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--bg3);position:sticky;top:0">
+              <th style="padding:7px 10px;font-size:10px;text-align:left;color:var(--muted)">CÓDIGO</th>
+              <th style="padding:7px 8px;font-size:10px;text-align:center;color:var(--muted)">NÍVEL</th>
+              <th style="padding:7px 10px;font-size:10px;text-align:left;color:var(--muted)">PRÊMIO</th>
+              <th style="padding:7px 10px;font-size:10px;text-align:left;color:var(--muted)">RESGATADO POR</th>
+            </tr></thead>
+            <tbody>${rowsHTML}</tbody>
+          </table>
+        </div>
+      </details>`;
+  });
+
+  let rankHTML = '';
+  if(ranking.length){
+    ranking.slice(0,20).forEach((r,i)=>{
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':('#'+(i+1));
+      rankHTML += `<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;${i%2===0?'background:rgba(255,255,255,.02)':''};border-radius:6px">
+        <div style="width:34px;font-family:'Orbitron',monospace;font-weight:700;color:${i<3?'var(--gold)':'var(--muted)'}">${medal}</div>
+        <div style="flex:1;font-size:13px;font-weight:600">${r.nome}</div>
+        <div style="font-family:'Orbitron',monospace;font-weight:900;color:var(--purple2)">${r.qtd} 🎟️</div>
+      </div>`;
+    });
+  } else {
+    rankHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Nenhum resgate ainda.</div>`;
+  }
+
+  main.innerHTML = `
+    <div style="padding:22px;max-width:1100px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900">🎟️ Códigos de Resgate</div>
+          <div style="font-size:12px;color:var(--muted2);margin-top:2px">Gere lotes de 100, imprima as raspadinhas e distribua em aula. Uso único por código.</div>
+        </div>
+        <button class="btn btn-p" onclick="gerarLoteCodigosProf()" style="font-family:'Orbitron',monospace;font-weight:900">➕ GERAR LOTE DE 100</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+        <div>${lotesHTML || '<div class="empty" style="padding:30px">Nenhum lote gerado ainda. Clique em GERAR LOTE DE 100 para começar!</div>'}</div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;position:sticky;top:10px">
+          <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;margin-bottom:10px;color:var(--gold)">🏆 RANKING DE RESGATES</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Geral — todos os alunos</div>
+          ${rankHTML}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function gerarLoteCodigosProf(){
+  if(!confirm('Gerar um novo lote de 100 códigos?\n\nDistribuição: 60 comuns (Nv1-5) · 30 raros (Nv6-10) · 9 épicos (Nv11-14) · 1 lendário (Nv15).')) return;
+  try{
+    showNotif('🎫 Gerando lote...');
+    const r = await apiFetch('/api/db?action=codigos-gerar', {});
+    showNotif(`✅ Lote ${r.lote} gerado com ${r.total} códigos!`);
+    openCodigosProf();
+  }catch(e){ showNotif('❌ Erro: '+e.message); }
+}
+
+// Impressão estilo RASPADINHA: cartões com o código grande e o prêmio embaixo
+// (o professor cobre a área do prêmio com fita/tinta raspável ao montar).
+function imprimirLote(lote){
+  const cs = (_codigosCache?.codigos||[]).filter(c=>c.lote===lote);
+  if(!cs.length) return;
+  const NV_TXT = n => n>=15?'LENDÁRIO ★':n>=11?'ÉPICO':n>=6?'RARO':'COMUM';
+  let cards = '';
+  cs.forEach(c=>{
+    cards += `<div class="card-r">
+      <div class="cr-top">
+        <div class="cr-brand">FARME AURA · CÓDIGO DE RESGATE</div>
+        <div class="cr-cod">${fmtCod(c.codigo)}</div>
+        <div class="cr-nivel">Nível ${c.nivel} · ${NV_TXT(c.nivel)}</div>
+      </div>
+      <div class="cr-premio">
+        <div class="cr-plabel">PRÊMIO (raspe/cubra):</div>
+        <div class="cr-pval">${c.premio?.label||''}</div>
+      </div>
+    </div>`;
+  });
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Lote ${lote} — Raspadinhas FARME AURA</title><style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}
+    body{padding:8mm}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}
+    .card-r{border:2px dashed #888;border-radius:8px;overflow:hidden;page-break-inside:avoid}
+    .cr-top{padding:8px 10px;text-align:center;background:#f4f0ff}
+    .cr-brand{font-size:8px;letter-spacing:1px;color:#7c5cfc;font-weight:700}
+    .cr-cod{font-size:17px;font-weight:900;letter-spacing:2px;margin:5px 0 2px;font-family:'Courier New',monospace}
+    .cr-nivel{font-size:9px;color:#555;font-weight:700}
+    .cr-premio{border-top:2px solid #ddd;padding:7px 10px;text-align:center;background:#fffbe8}
+    .cr-plabel{font-size:7px;color:#999;letter-spacing:1px}
+    .cr-pval{font-size:12px;font-weight:900;margin-top:3px;color:#1a1438}
+    @media print{ body{padding:5mm} }
+  </style></head><body>
+    <div style="text-align:center;margin-bottom:5mm;font-size:11px;color:#666">FARME AURA — Lote ${lote} · ${cs.length} códigos · Recorte nos tracejados · Cubra a área do prêmio (fita adesiva ou tinta raspável)</div>
+    <div class="grid">${cards}</div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>
+  </body></html>`);
+  w.document.close();
+}
 
 function openEventos(){
   CTid = null; renderSB();
@@ -9207,7 +9364,22 @@ async function finalizeMission(byTimer){
     CU._currentIsSuperQuest = false;
   }
   CU.activeMission = null;
-  
+
+  // v2 — NOTA DA SESSÃO: grava a aura ganha nesta sessão no registro de farm
+  // da aula (só sessões CONCLUÍDAS chegam aqui — abandono não recebe nota).
+  try{
+    if(CU._aulaAtual && Array.isArray(CU.farmHistorico)){
+      // acha o registro mais recente desta aula ainda sem nota
+      for(let i = CU.farmHistorico.length - 1; i >= 0; i--){
+        const h = CU.farmHistorico[i];
+        if(h && h.aula === CU._aulaAtual && h.nota === undefined){
+          h.nota = parseFloat((missionAccumulatedAura || 0).toFixed(3));
+          break;
+        }
+      }
+    }
+  }catch(e){ console.warn('nota farmHistorico:', e); }
+
   // Persistência no Supabase
   try{
     await fetch(`${API_BASE}/api/student?action=update`,{
@@ -9226,7 +9398,8 @@ async function finalizeMission(byTimer){
           dobradorRemaining:CU.dobradorRemaining,
           activeMission:null,
           calvaoBloqueadoUntil:CU.calvaoBloqueadoUntil||null,
-          iaWarnings:CU.iaWarnings||[]
+          iaWarnings:CU.iaWarnings||[],
+          farmHistorico:CU.farmHistorico||[]
         }
       })
     });
@@ -10672,96 +10845,108 @@ function searchGlobalAlunos(value){
 function renderAulasTab(){
   const t = DB.turmas.find(x => x.id === CTid);
   if(!t) return '<div class="empty">Turma não encontrada.</div>';
-  
-  // Pega bimestre ativo
+
+  // Bimestre ativo + período (início do bim até início do próximo, ou hoje)
   const hoje = new Date().toISOString().split('T')[0];
   let bimN = 1;
   for(let n=4;n>=1;n--){ if(DB.bimDates && DB.bimDates[`i${n}`] && DB.bimDates[`i${n}`]<=hoje){bimN=n;break;} }
-  
+  const iniStr = DB.bimDates?.[`i${bimN}`] || '2000-01-01';
+  const fimStr = DB.bimDates?.[`i${bimN+1}`] || '2999-12-31';
+  const iniTs = new Date(iniStr+'T00:00:00-03:00').getTime();
+  const fimTs = new Date(fimStr+'T00:00:00-03:00').getTime();
+
   const serie = t.ano;
   const pd = DB.seriesPDF?.[serie]?.[`b${bimN}`] || {};
   const numAulas = pd.numAulas || 0;
-  const bimKey = `bim${bimN}`;
-  
+
   if(numAulas === 0){
     return `
       <div style="padding:24px">
-        <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900;margin-bottom:8px">📚 Controle de Aulas — ${bimN}º Bimestre</div>
+        <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900;margin-bottom:8px">📚 Notas de Farm — ${bimN}º Bimestre</div>
         <div class="empty" style="margin-top:20px">
           Nenhuma aula configurada para este bimestre.<br>
           Vá em <strong>Bimestres</strong> e defina a quantidade de aulas do ${bimN}º bimestre.
         </div>
       </div>`;
   }
-  
+
   const alunos = [...t.alunos].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
-  
-  // Cabeçalho das colunas de aulas
+  const fmtNota = n => (Math.round(n*10)/10).toFixed(1).replace('.',',');
+
+  // v2 — coleta as NOTAS de farm (farmHistorico) por aluno × aula, dentro do bimestre.
+  // Só sessões CONCLUÍDAS têm nota; farmes abandonados ficam sem nota e não entram.
+  const notasDe = (a, aulaN) => (a.farmHistorico||[])
+    .filter(h => h && h.aula === aulaN && typeof h.nota === 'number'
+              && h.ts >= iniTs && h.ts < fimTs)
+    .map(h => h.nota);
+
   let thAulas = '';
   for(let i=1;i<=numAulas;i++){
-    thAulas += `<th style="padding:6px 8px;font-size:10px;text-align:center;min-width:42px;color:var(--muted);font-weight:700;white-space:nowrap">A${i}</th>`;
+    thAulas += `<th style="padding:6px 8px;font-size:10px;text-align:center;min-width:64px;color:var(--muted);font-weight:700;white-space:nowrap">A${i}</th>`;
   }
-  
-  // Linhas dos alunos
+
   let rows = '';
   alunos.forEach((a, idx) => {
-    const aulasUsadas = a.aulasUsadas || {};
-    let total0 = 0, total1 = 0, total2 = 0;
     let tds = '';
+    let todasNotas = [];
     for(let i=1;i<=numAulas;i++){
-      const key = `${bimKey}_aula${i}`;
-      const usos = aulasUsadas[key] || 0;
-      const bg = usos === 2 ? 'rgba(14,164,114,.18)' : usos === 1 ? 'rgba(240,180,41,.12)' : 'transparent';
-      const color = usos === 2 ? 'var(--green2)' : usos === 1 ? 'var(--gold)' : 'var(--muted)';
-      const label = usos === 2 ? '2×' : usos === 1 ? '1×' : '—';
-      if(usos===2) total2++;
-      else if(usos===1) total1++;
-      else total0++;
-      tds += `<td style="padding:5px 4px;text-align:center;background:${bg};font-size:11px;font-weight:700;color:${color}">${label}</td>`;
+      const notas = notasDe(a, i);
+      todasNotas = todasNotas.concat(notas);
+      if(notas.length === 0){
+        tds += `<td style="padding:5px 4px;text-align:center;font-size:11px;color:var(--muted)">—</td>`;
+      } else {
+        const media = notas.reduce((s,n)=>s+n,0)/notas.length;
+        const cor = media>=3 ? 'var(--green2)' : media>=2 ? 'var(--gold)' : 'var(--red2)';
+        const bg  = media>=3 ? 'rgba(14,164,114,.14)' : media>=2 ? 'rgba(240,180,41,.10)' : 'rgba(229,62,62,.10)';
+        tds += `<td style="padding:5px 5px;text-align:center;background:${bg};font-size:11px;font-weight:700;color:${cor};white-space:nowrap" title="${notas.length} sessão(ões) concluída(s) nesta aula">${notas.map(fmtNota).join('; ')}</td>`;
+      }
     }
-    const aulasFeitas = total1 + (total2*2);
-    const pct = Math.round((aulasFeitas/(numAulas*2))*100);
+    const mediaAluno = todasNotas.length ? todasNotas.reduce((s,n)=>s+n,0)/todasNotas.length : 0;
+    const corM = mediaAluno>=3 ? 'var(--green2)' : mediaAluno>=2 ? 'var(--gold)' : todasNotas.length? 'var(--red2)' : 'var(--muted)';
     rows += `
       <tr style="${idx%2===0?'background:rgba(255,255,255,.02)':''}">
         <td style="padding:7px 10px;font-size:12px;font-weight:600;white-space:nowrap;position:sticky;left:0;background:${idx%2===0?'#0d1117':'#0a0e14'};z-index:1">${a.nome}</td>
         ${tds}
-        <td style="padding:5px 8px;text-align:center;font-size:11px;font-weight:700;color:${pct>=80?'var(--green2)':pct>=40?'var(--gold)':'var(--muted)'}">
-          ${pct}%
-        </td>
+        <td style="padding:5px 6px;text-align:center;font-size:11px;font-weight:700;color:var(--muted2)">${todasNotas.length}</td>
+        <td style="padding:5px 8px;text-align:center;font-size:12px;font-weight:900;font-family:'Orbitron',monospace;color:${corM}">${todasNotas.length?fmtNota(mediaAluno):'—'}</td>
       </tr>`;
   });
-  
-  // Resumo por aula (última linha)
+
+  // Rodapé: média da turma por aula
   let footerTds = '';
   for(let i=1;i<=numAulas;i++){
-    const key = `${bimKey}_aula${i}`;
-    const total = alunos.reduce((s,a) => s + (a.aulasUsadas?.[key]||0), 0);
-    const max = alunos.length * 2;
-    const pct = max > 0 ? Math.round((total/max)*100) : 0;
-    footerTds += `<td style="padding:5px 4px;text-align:center;font-size:10px;color:${pct>=80?'var(--green2)':pct>=40?'var(--gold)':'var(--muted)'};">${pct}%</td>`;
+    const todas = alunos.flatMap(a => notasDe(a, i));
+    if(todas.length === 0){ footerTds += `<td style="padding:5px 4px;text-align:center;font-size:10px;color:var(--muted)">—</td>`; continue; }
+    const m = todas.reduce((s,n)=>s+n,0)/todas.length;
+    const cor = m>=3?'var(--green2)':m>=2?'var(--gold)':'var(--red2)';
+    footerTds += `<td style="padding:5px 4px;text-align:center;font-size:10px;font-weight:700;color:${cor}">${fmtNota(m)}</td>`;
   }
-  
+
   return `
     <div style="padding:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900">📚 Aulas — ${bimN}º Bimestre</div>
-          <div style="font-size:12px;color:var(--muted2);margin-top:2px">${alunos.length} aluno(s) · ${numAulas} aula(s) · máx 2× cada</div>
+          <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900">📚 Notas de Farm — ${bimN}º Bimestre</div>
+          <div style="font-size:12px;color:var(--muted2);margin-top:2px">${alunos.length} aluno(s) · ${numAulas} aula(s) · notas de cada sessão concluída, separadas por ;</div>
         </div>
-        <div style="display:flex;gap:12px;font-size:11px">
-          <span style="color:var(--green2)">■ 2× completo</span>
-          <span style="color:var(--gold)">■ 1× parcial</span>
-          <span style="color:var(--muted)">■ — não fez</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:12px;font-size:11px;margin-right:8px">
+            <span style="color:var(--green2)">■ ≥3,0</span>
+            <span style="color:var(--gold)">■ 2,0–2,9</span>
+            <span style="color:var(--red2)">■ &lt;2,0</span>
+          </div>
+          <button class="btn btn-sm" onclick="exportAulasNotas()" style="border-color:rgba(14,164,114,.4);color:var(--green2)">📥 Exportar Excel</button>
         </div>
       </div>
-      
+
       <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--r)">
-        <table style="width:100%;border-collapse:collapse;min-width:${200 + numAulas*46}px">
+        <table style="width:100%;border-collapse:collapse;min-width:${260 + numAulas*66}px">
           <thead>
             <tr style="background:var(--bg3);border-bottom:1px solid var(--border)">
               <th style="padding:8px 10px;font-size:11px;text-align:left;min-width:160px;position:sticky;left:0;background:var(--bg3);z-index:2;color:var(--muted);font-weight:700">ALUNO</th>
               ${thAulas}
-              <th style="padding:6px 8px;font-size:10px;text-align:center;min-width:52px;color:var(--purple2);font-weight:700">%</th>
+              <th style="padding:6px 6px;font-size:10px;text-align:center;min-width:44px;color:var(--muted);font-weight:700">SESSÕES</th>
+              <th style="padding:6px 8px;font-size:10px;text-align:center;min-width:52px;color:var(--purple2);font-weight:700">MÉDIA</th>
             </tr>
           </thead>
           <tbody>
@@ -10769,18 +10954,52 @@ function renderAulasTab(){
           </tbody>
           <tfoot>
             <tr style="background:var(--bg3);border-top:1px solid var(--border)">
-              <td style="padding:6px 10px;font-size:10px;color:var(--muted);font-weight:700;position:sticky;left:0;background:var(--bg3)">ENGAJAMENTO</td>
+              <td style="padding:6px 10px;font-size:10px;color:var(--muted);font-weight:700;position:sticky;left:0;background:var(--bg3)">MÉDIA DA TURMA</td>
               ${footerTds}
-              <td></td>
+              <td></td><td></td>
             </tr>
           </tfoot>
         </table>
       </div>
-      
+
       <div style="margin-top:10px;font-size:11px;color:var(--muted)">
-        Linha % = aproveitamento do aluno (uso total ÷ máximo possível). Coluna % (rodapé) = engajamento da turma naquela aula.
+        Cada valor é a aura ganha em uma sessão concluída com o Calvão naquela aula (várias sessões = valores separados por ;).
+        Farmes abandonados no meio não geram nota. Acumula o bimestre inteiro.
       </div>
     </div>`;
+}
+
+// v2 — exporta a planilha de notas de farm da turma para Excel
+function exportAulasNotas(){
+  const t = DB.turmas.find(x => x.id === CTid);
+  if(!t) return;
+  const hoje = new Date().toISOString().split('T')[0];
+  let bimN = 1;
+  for(let n=4;n>=1;n--){ if(DB.bimDates && DB.bimDates[`i${n}`] && DB.bimDates[`i${n}`]<=hoje){bimN=n;break;} }
+  const iniTs = new Date((DB.bimDates?.[`i${bimN}`]||'2000-01-01')+'T00:00:00-03:00').getTime();
+  const fimTs = new Date((DB.bimDates?.[`i${bimN+1}`]||'2999-12-31')+'T00:00:00-03:00').getTime();
+  const pd = DB.seriesPDF?.[t.ano]?.[`b${bimN}`] || {};
+  const numAulas = pd.numAulas || 0;
+  const alunos = [...t.alunos].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  const header = ['Aluno'];
+  for(let i=1;i<=numAulas;i++) header.push('Aula '+i);
+  header.push('Sessões','Média');
+  const linhas = [header];
+  alunos.forEach(a=>{
+    const row=[a.nome]; let todas=[];
+    for(let i=1;i<=numAulas;i++){
+      const ns=(a.farmHistorico||[]).filter(h=>h&&h.aula===i&&typeof h.nota==='number'&&h.ts>=iniTs&&h.ts<fimTs).map(h=>h.nota);
+      todas=todas.concat(ns);
+      row.push(ns.map(n=>n.toFixed(3).replace('.',',')).join('; '));
+    }
+    row.push(todas.length);
+    row.push(todas.length?(todas.reduce((s,n)=>s+n,0)/todas.length).toFixed(3).replace('.',','):'');
+    linhas.push(row);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(linhas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `Notas Farm B${bimN}`);
+  XLSX.writeFile(wb, `notas-farm-${t.ano}-${t.turma}-bim${bimN}.xlsx`.replace(/\s+/g,'-'));
 }
 
 function renderGlobalViewContent(todosAlunos){
@@ -12071,6 +12290,7 @@ if('serviceWorker' in navigator){
       <div class="fw-vsi" data-tab="alianca" onclick="fwTab('alianca',this)">🤝<div class="fw-tip">Alianças · Blocos Regionais</div></div>
       <div class="fw-vsi" data-tab="defesa" onclick="fwTab('defesa',this)">🛡️<div class="fw-tip">Defesa da Vila</div></div>
       <div class="fw-vsi" data-tab="exercito" onclick="fwTab('exercito',this)">⚔️<div class="fw-tip">Exército</div></div>
+      <div class="fw-vsi" data-tab="codigos" onclick="fwTab('codigos',this)">🎟️<div class="fw-tip">Resgatar Código · Cofre</div><span class="fw-badge" id="fw-badge-cofre" style="display:none">0</span></div>
       <div class="fw-vsi" data-tab="ranking" onclick="fwTab('ranking',this)">🏆<div class="fw-tip">Ranking</div></div>
     </nav>
     <div id="fw-vmap">
@@ -12894,7 +13114,7 @@ function fwRenderHUD(){
   document.getElementById('fw-stage-n').textContent=est;
   document.querySelector('#fw-vstage').firstChild.textContent=emo[est]+' ';
 }
-const FW_VPT={recursos:'⛏️ Setor Primário — Extração',industria:'🏭 Setor Secundário — Indústria',armazem:'📦 Armazém — Alocação',transporte:'🚚 Setor Terciário — Transporte',loja:'🏪 Loja / Mercado Mundial',entregas:'🚛 Entregas em trânsito',alianca:'🤝 Blocos Regionais',exercito:'⚔️ Exército',ranking:'🏆 Ranking'};
+const FW_VPT={recursos:'⛏️ Setor Primário — Extração',industria:'🏭 Setor Secundário — Indústria',armazem:'📦 Armazém — Alocação',transporte:'🚚 Setor Terciário — Transporte',loja:'🏪 Loja / Mercado Mundial',entregas:'🚛 Entregas em trânsito',alianca:'🤝 Blocos Regionais',exercito:'⚔️ Exército',codigos:'🎟️ Códigos & Cofre',ranking:'🏆 Ranking'};
 window.fwTab=function(tab,btn){
   FW._vtab=tab;
   document.querySelectorAll('#fw-vside .fw-vsi').forEach(b=>b.classList.remove('active'));
@@ -12911,6 +13131,126 @@ function fwRenderVP(){
   else if(t==='alianca')fwVAli(b);else if(t==='ranking')fwVRank(b);
   else if(t==='defesa')fwVDefesa(b);
   else if(t==='exercito')fwVExercito(b);
+  else if(t==='codigos')fwVCodigos(b);
+}
+
+// ─── CÓDIGOS RESGATÁVEIS + COFRE (v2) ───
+function fwVCodigos(b){
+  const cofre = (typeof CU!=='undefined' && CU && Array.isArray(CU.cofre)) ? CU.cofre : [];
+  const NV_COR = n => n>=15?'#f0b429' : n>=11?'#a78bfa' : n>=6?'#3fb89e' : '#8a97b0';
+  const NV_NOME = n => n>=15?'LENDÁRIO' : n>=11?'ÉPICO' : n>=6?'RARO' : 'COMUM';
+  const EMOJI = p => p.tipo==='recurso'?'📦' : p.tipo==='aura'?'✨' : p.tipo==='mft'?'🏭' : p.tipo==='defesa'?'🛡️' : p.tipo==='tropa'?'⚔️' : p.tipo==='escudo'?'🔰' : p.tipo==='ego'?'💎' : '🎁';
+  let itensHTML = '';
+  if(!cofre.length){
+    itensHTML = `<div style="text-align:center;padding:24px;color:#6a7690;font-size:12px">Seu cofre está vazio.<br>Resgate códigos que o professor distribuir em aula!</div>`;
+  } else {
+    cofre.forEach(item=>{
+      itensHTML += `<div style="display:flex;align-items:center;gap:10px;background:#151d2e;border:1px solid ${NV_COR(item.nivel||1)}44;border-left:3px solid ${NV_COR(item.nivel||1)};border-radius:8px;padding:9px 12px;margin-bottom:7px">
+        <div style="font-size:20px">${EMOJI(item)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700;color:#e6ecf7">${item.label||'Prêmio'}</div>
+          <div style="font-size:9px;color:${NV_COR(item.nivel||1)};font-weight:700;letter-spacing:.5px">NÍVEL ${item.nivel||'?'} · ${NV_NOME(item.nivel||1)}</div>
+        </div>
+        <button onclick="fwCofreUsar('${item.id}')" style="background:linear-gradient(135deg,#7c5cfc,#a78bfa);border:none;color:#fff;padding:7px 14px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Orbitron',monospace">USAR</button>
+      </div>`;
+    });
+  }
+  b.innerHTML = `
+    <div style="padding:2px 2px 10px">
+      <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:#a78bfa;margin-bottom:10px">🎟️ RESGATAR CÓDIGO</div>
+      <div style="background:#151d2e;border:1px solid rgba(124,92,252,.35);border-radius:10px;padding:14px">
+        <div style="font-size:11px;color:#8a97b0;margin-bottom:8px">Digite o código de 10 caracteres que você recebeu do professor:</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="fw-cod-input" maxlength="12" placeholder="XXXX-XXXX-XX" autocomplete="off"
+            oninput="fwMascaraCodigo(this)"
+            style="flex:1;min-width:170px;background:#0d1424;border:1.5px solid rgba(124,92,252,.4);border-radius:8px;padding:11px 12px;color:#ffe98d;font-family:'Orbitron',monospace;font-size:16px;font-weight:900;letter-spacing:3px;text-transform:uppercase;text-align:center">
+          <button id="fw-cod-btn" onclick="fwResgatarCodigo()" style="background:linear-gradient(135deg,#f0b429,#e0a92e);border:none;color:#1a1438;padding:11px 20px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;font-family:'Orbitron',monospace">RESGATAR</button>
+        </div>
+        <div id="fw-cod-msg" style="margin-top:8px;font-size:11px;display:none"></div>
+      </div>
+
+      <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:#3fb89e;margin:18px 0 10px">🧰 MEU COFRE <span style="color:#6a7690;font-size:10px;font-weight:400">· ${cofre.length} item(ns) · não expira, use quando quiser</span></div>
+      ${itensHTML}
+      <div style="margin-top:10px;font-size:10px;color:#6a7690;line-height:1.5">
+        Recursos entram na vila respeitando o espaço do armazém — se não couber tudo, <b style="color:#3fb89e">o resto continua aqui no cofre</b> (nada se perde).
+      </div>
+    </div>`;
+  fwAtualizarBadgeCofre();
+}
+
+// máscara XXXX-XXXX-XX (hífens automáticos)
+window.fwMascaraCodigo = function(inp){
+  let v = inp.value.toUpperCase().replace(/[^0-9A-F]/g,'').slice(0,10);
+  let out = v.slice(0,4);
+  if(v.length>4) out += '-'+v.slice(4,8);
+  if(v.length>8) out += '-'+v.slice(8,10);
+  inp.value = out;
+};
+
+window.fwResgatarCodigo = async function(){
+  const inp = document.getElementById('fw-cod-input');
+  const btn = document.getElementById('fw-cod-btn');
+  const msg = document.getElementById('fw-cod-msg');
+  const cod = (inp.value||'').replace(/-/g,'');
+  msg.style.display='none';
+  if(cod.length !== 10){ msg.textContent='⚠️ O código tem 10 caracteres.'; msg.style.color='#fc8181'; msg.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = '...';
+  const r = await fwApi('codigo-resgatar', { codigo: cod });
+  btn.disabled = false; btn.textContent = 'RESGATAR';
+  if(r.ok && r.data && r.data.premio){
+    CU.cofre = r.data.cofre || [];
+    inp.value='';
+    fwNotif('🎉 CÓDIGO RESGATADO: '+(r.data.premio.label||'prêmio')+' — está no seu cofre!');
+    fwRenderVP();
+  } else {
+    msg.textContent = '❌ ' + (r.error || 'Não foi possível resgatar.');
+    msg.style.color='#fc8181'; msg.style.display='block';
+  }
+};
+
+window.fwCofreUsar = async function(itemId){
+  const r = await fwApi('cofre-usar', { itemId });
+  if(r.ok && r.data){
+    const usado = r.data.usado;
+    CU.cofre = r.data.cofre || [];
+    // EGO: o servidor libera; o cliente sorteia do pool e adiciona à bagagem
+    if(usado && usado.tipo==='ego'){
+      try{ fwEntregarEgoDoCofre(usado); }catch(e){ console.warn('ego cofre:', e); }
+    }
+    fwNotif('✅ '+(r.data.msg||'Item usado!'));
+    // recarrega a vila (recursos/defesa/tropas mudaram no servidor)
+    const l = await fwApi('load', {}); if(l.ok&&l.data) fwAplicarVila(l.data.vila);
+    fwRenderVP(); fwRenderHUD();
+  } else {
+    fwNotif('⚠️ '+(r.error||'Não foi possível usar o item.'));
+  }
+};
+
+// sorteia um EGO do tier e entrega na bagagem (mesmo fluxo do gacha)
+function fwEntregarEgoDoCofre(item){
+  if(typeof GACHA_POOL==='undefined' || typeof CU==='undefined') return;
+  const tier = item.tier || 'divino';
+  const pool = GACHA_POOL.filter(e => e.tier === tier);
+  if(!pool.length) return;
+  const ego = pool[Math.floor(Math.random()*pool.length)];
+  if(typeof addEgoToBagagem === 'function'){
+    addEgoToBagagem(CU, ego);
+  } else if(Array.isArray(CU.bagagem)){
+    const slot = CU.bagagem.findIndex(s=>!s);
+    if(slot>=0) CU.bagagem[slot] = { egoId: ego.id, tier: ego.tier, obtidoEm: Date.now() };
+  }
+  // persiste a bagagem
+  try{
+    fetch(`${API_BASE}/api/student?action=update`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({login:studentLogin||CU.login,senha:studentSenha||CU.senha,patch:{bagagem:CU.bagagem}})});
+  }catch(e){}
+}
+
+function fwAtualizarBadgeCofre(){
+  const el = document.getElementById('fw-badge-cofre');
+  if(!el) return;
+  const n = (typeof CU!=='undefined' && CU && Array.isArray(CU.cofre)) ? CU.cofre.length : 0;
+  el.textContent = n; el.style.display = n>0 ? '' : 'none';
 }
 
 // ─── PAINEL DE DEFESA DA VILA (Bloco 3) ───
