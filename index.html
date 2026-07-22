@@ -894,79 +894,170 @@ input, textarea, select{ font-size:14px; }
 <div id="login-screen">
   <!-- BLOCO 5 visual: cenário das 4 Revoluções Industriais ao fundo -->
   <div id="login-eras-bg" style="position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none">
-    <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;opacity:.5">
+    <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;opacity:.6">
       <defs>
-        <linearGradient id="skyEras" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#1a1438"/>
-          <stop offset="50%" stop-color="#241a4a"/>
-          <stop offset="100%" stop-color="#14102a"/>
+        <linearGradient id="lb-bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0b0816"/>
+          <stop offset="50%" stop-color="#161129"/>
+          <stop offset="100%" stop-color="#080612"/>
         </linearGradient>
-        <linearGradient id="era1g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8a6d3b"/><stop offset="100%" stop-color="#5a4424"/></linearGradient>
-        <linearGradient id="era2g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c9962e"/><stop offset="100%" stop-color="#8a6420"/></linearGradient>
-        <linearGradient id="era3g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b9e8f"/><stop offset="100%" stop-color="#1f6e60"/></linearGradient>
-        <linearGradient id="era4g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7c5cfc"/><stop offset="100%" stop-color="#4a34a8"/></linearGradient>
+        <radialGradient id="lb-smokeGrad1" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#eab308" stop-opacity="0.75"/>
+          <stop offset="50%" stop-color="#ca8a04" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#854d0e" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="lb-lightningGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="50%" stop-color="#fde047"/>
+          <stop offset="100%" stop-color="#eab308"/>
+        </linearGradient>
+        <linearGradient id="lb-droneBeam" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="lb-intenseGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="12" result="blur1" />
+          <feGaussianBlur stdDeviation="6" result="blur2" />
+          <feMerge><feMergeNode in="blur1"/><feMergeNode in="blur2"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="lb-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="8" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="lb-softGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
       </defs>
-      <rect width="1440" height="900" fill="url(#skyEras)"/>
-      <!-- estrelas -->
-      <g fill="#fff" opacity=".5">
-        <circle cx="200" cy="120" r="1.5"/><circle cx="480" cy="80" r="1"/><circle cx="760" cy="140" r="1.5"/>
-        <circle cx="1040" cy="90" r="1"/><circle cx="1300" cy="130" r="1.5"/><circle cx="900" cy="60" r="1"/>
-        <circle cx="340" cy="200" r="1"/><circle cx="1180" cy="180" r="1.2"/><circle cx="620" cy="170" r="1"/>
+      <style>
+        .lb-section-title { font-family: 'Orbitron',monospace; font-weight: 800; font-size: 21px; letter-spacing: 2px; text-anchor: middle; text-transform: uppercase; }
+        .lb-section-num { font-weight: 900; font-size: 23px; }
+        @keyframes lbSmokePuffRising { 0% { transform: translateY(0px) scale(0.4) translateX(0px); opacity: 0.85; } 50% { opacity: 0.6; } 100% { transform: translateY(-230px) scale(2.4) translateX(40px); opacity: 0; } }
+        .lb-smoke-1 { animation: lbSmokePuffRising 3.6s infinite linear; transform-box: fill-box; transform-origin: center bottom; }
+        .lb-smoke-2 { animation: lbSmokePuffRising 3.6s infinite linear 1.2s; transform-box: fill-box; transform-origin: center bottom; }
+        .lb-smoke-3 { animation: lbSmokePuffRising 3.6s infinite linear 2.4s; transform-box: fill-box; transform-origin: center bottom; }
+        @keyframes lbGearRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .lb-gear-spin { animation: lbGearRotate 12s linear infinite; transform-box: fill-box; transform-origin: center; }
+        @keyframes lbWindowPulse1 { 0%, 100% { fill: #fef08a; opacity: 0.9; } 30% { fill: #ca8a04; opacity: 0.3; } }
+        @keyframes lbWindowPulse2 { 0%, 100% { fill: #ca8a04; opacity: 0.2; } 40% { fill: #facc15; opacity: 0.95; } }
+        .lb-win-glow-1 { animation: lbWindowPulse1 3.5s infinite ease-in-out; }
+        .lb-win-glow-2 { animation: lbWindowPulse2 4.5s infinite ease-in-out 1s; }
+        @keyframes lbLightningStrike { 0%, 88%, 100% { opacity: 0; stroke-dashoffset: 120; } 90%, 96% { opacity: 1; stroke-dashoffset: 0; } 93% { opacity: 0.4; stroke-dashoffset: 0; } }
+        .lb-lightning-bolt { stroke-dasharray: 120; animation: lbLightningStrike 4s infinite ease-out; }
+        @keyframes lbMainArmRotate { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-18deg); } 60% { transform: rotate(12deg); } }
+        @keyframes lbForearmRotate { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(25deg); } 70% { transform: rotate(-15deg); } }
+        @keyframes lbWeldingLaserSpark { 0%, 100% { opacity: 0.1; stroke-width: 1px; } 20%, 30% { opacity: 1; stroke-width: 3.5px; } }
+        @keyframes lbConveyorItems { 0% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -50; } }
+        .lb-arm-base-pivot { animation: lbMainArmRotate 6s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
+        .lb-arm-forearm-pivot { animation: lbForearmRotate 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center left; }
+        .lb-welding-spark { animation: lbWeldingLaserSpark 1.5s infinite ease-in-out; }
+        .lb-conveyor-belt-items { stroke-dasharray: 12 12; animation: lbConveyorItems 2s linear infinite; }
+        @keyframes lbDataPulse { 0% { stroke-dashoffset: 200; opacity: 0.2; } 50% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0.2; } }
+        .lb-circuit-line { stroke-dasharray: 200; animation: lbDataPulse 3s linear infinite; }
+        @keyframes lbDroneHover1 { 0%, 100% { transform: translate(1520px, 340px); } 50% { transform: translate(1560px, 370px); } }
+        @keyframes lbDroneHover2 { 0%, 100% { transform: translate(1730px, 390px); } 50% { transform: translate(1700px, 350px); } }
+        @keyframes lbDroneHover3 { 0%, 100% { transform: translate(1630px, 240px); } 50% { transform: translate(1660px, 270px); } }
+        @keyframes lbRotorSpin { 0% { transform: scaleX(1); } 50% { transform: scaleX(0.15); } 100% { transform: scaleX(1); } }
+        @keyframes lbNetworkPulse { 0%, 100% { stroke-dashoffset: 100; opacity: 0.2; } 50% { stroke-dashoffset: 0; opacity: 1; } }
+        .lb-drone-group-1 { animation: lbDroneHover1 8s ease-in-out infinite; }
+        .lb-drone-group-2 { animation: lbDroneHover2 9s ease-in-out infinite; }
+        .lb-drone-group-3 { animation: lbDroneHover3 7s ease-in-out infinite; }
+        .lb-rotor { animation: lbRotorSpin 0.12s linear infinite; transform-box: fill-box; transform-origin: center; }
+        .lb-network-link { stroke-dasharray: 12 6; animation: lbNetworkPulse 2.5s linear infinite; }
+        .lb-bg-grid { stroke: #261d3b; stroke-width: 0.5; opacity: 0.35; }
+      </style>
+      <rect width="1920" height="1080" fill="url(#lb-bgGradient)"/>
+      <g class="lb-bg-grid">
+        <path d="M0,200 H1920 M0,400 H1920 M0,600 H1920 M0,800 H1920" />
+        <path d="M240,0 V1080 M480,0 V1080 M720,0 V1080 M960,0 V1080 M1200,0 V1080 M1440,0 V1080 M1680,0 V1080" />
       </g>
-      <!-- chão -->
-      <rect y="640" width="1440" height="260" fill="#0f0a22"/>
-      <!-- ERA 1 — Vapor (chaminés a fumaça) -->
-      <g>
-        <rect x="80" y="440" width="240" height="200" fill="url(#era1g)"/>
-        <rect x="120" y="360" width="34" height="90" fill="#6a512c"/>
-        <rect x="180" y="340" width="34" height="110" fill="#6a512c"/>
-        <rect x="240" y="380" width="30" height="70" fill="#6a512c"/>
-        <circle cx="137" cy="350" r="20" fill="#cfc4d8" opacity=".4"><animate attributeName="cy" values="350;320;350" dur="4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".4;.1;.4" dur="4s" repeatCount="indefinite"/></circle>
-        <circle cx="197" cy="330" r="22" fill="#cfc4d8" opacity=".4"><animate attributeName="cy" values="330;295;330" dur="5s" repeatCount="indefinite"/><animate attributeName="opacity" values=".4;.1;.4" dur="5s" repeatCount="indefinite"/></circle>
-        <rect x="110" y="500" width="30" height="40" fill="#3a2c18"/><rect x="170" y="500" width="30" height="40" fill="#3a2c18"/><rect x="230" y="500" width="30" height="40" fill="#3a2c18"/>
-        <text x="200" y="680" text-anchor="middle" fill="#8a6d3b" font-family="Orbitron,monospace" font-size="22" font-weight="900">1ª · VAPOR</text>
+      <line x1="0" y1="820" x2="1920" y2="820" stroke="#33284d" stroke-width="2" />
+      <!-- 1ª VAPOR -->
+      <g id="lb-sec-vapor">
+        <g transform="translate(180, 515)">
+          <circle class="lb-smoke-1" cx="0" cy="0" r="18" fill="url(#lb-smokeGrad1)" />
+          <circle class="lb-smoke-2" cx="0" cy="0" r="22" fill="url(#lb-smokeGrad1)" />
+          <circle class="lb-smoke-3" cx="0" cy="0" r="26" fill="url(#lb-smokeGrad1)" />
+        </g>
+        <g transform="translate(295, 465)">
+          <circle class="lb-smoke-1" cx="0" cy="0" r="20" fill="url(#lb-smokeGrad1)" />
+          <circle class="lb-smoke-2" cx="0" cy="0" r="25" fill="url(#lb-smokeGrad1)" />
+        </g>
+        <path d="M 60,820 V 580 L 120,620 V 580 L 180,620 V 580 L 240,620 V 520 H 310 V 820 Z" fill="#2d1d19" opacity="0.9" />
+        <rect x="165" y="520" width="30" height="260" fill="#231411" />
+        <rect x="277" y="470" width="36" height="310" fill="#1d0f0c" />
+        <g transform="translate(115, 720)" class="lb-gear-spin" fill="#523223">
+          <path d="M0 -30 L6 -30 L8 -22 A25 25 0 0 1 18 -18 L25 -22 L30 -16 L25 -9 A25 25 0 0 1 27 3 L34 8 L30 16 L22 14 A25 25 0 0 1 18 22 L21 30 L14 33 L9 25 A25 25 0 0 1 -3 27 L-8 34 L-16 30 L-14 22 A25 25 0 0 1 -22 18 L-30 22 L-33 14 L-25 9 A25 25 0 0 1 -27 -3 L-34 -8 L-30 -16 L-22 -14 A25 25 0 0 1 -18 -22 L-21 -30 L-14 -33 L-9 -25 A25 25 0 0 1 3 -27 Z"/>
+          <circle cx="0" cy="0" r="10" fill="#0b0816"/>
+        </g>
+        <text x="210" y="870" class="lb-section-title" fill="#8c5839"><tspan class="lb-section-num" fill="#b86b35">1ª</tspan> • VAPOR</text>
       </g>
-      <!-- ERA 2 — Elétrica (postes e luz) -->
-      <g>
-        <rect x="420" y="400" width="220" height="240" fill="url(#era2g)"/>
-        <rect x="450" y="430" width="40" height="50" fill="#fff3c4" opacity=".7"><animate attributeName="opacity" values=".7;.3;.7" dur="2s" repeatCount="indefinite"/></rect>
-        <rect x="510" y="430" width="40" height="50" fill="#fff3c4" opacity=".7"><animate attributeName="opacity" values=".3;.7;.3" dur="2.3s" repeatCount="indefinite"/></rect>
-        <rect x="570" y="430" width="40" height="50" fill="#fff3c4" opacity=".7"><animate attributeName="opacity" values=".7;.3;.7" dur="1.8s" repeatCount="indefinite"/></rect>
-        <rect x="450" y="510" width="40" height="50" fill="#fff3c4" opacity=".6"/><rect x="510" y="510" width="40" height="50" fill="#fff3c4" opacity=".6"/><rect x="570" y="510" width="40" height="50" fill="#fff3c4" opacity=".6"/>
-        <line x1="640" y1="380" x2="660" y2="640" stroke="#5a4420" stroke-width="6"/>
-        <text x="530" y="680" text-anchor="middle" fill="#c9962e" font-family="Orbitron,monospace" font-size="22" font-weight="900">2ª · ELÉTRICA</text>
+      <!-- 2ª ELÉTRICA -->
+      <g id="lb-sec-eletrica">
+        <rect x="390" y="490" width="180" height="330" fill="#3a2e1d" opacity="0.95" />
+        <rect x="550" y="430" width="140" height="390" fill="#291e10" opacity="0.98" />
+        <rect x="410" y="520" width="30" height="38" rx="3" class="lb-win-glow-1" />
+        <rect x="460" y="520" width="30" height="38" rx="3" class="lb-win-glow-2" />
+        <rect x="510" y="520" width="30" height="38" rx="3" class="lb-win-glow-1" />
+        <rect x="410" y="580" width="30" height="38" rx="3" class="lb-win-glow-2" />
+        <rect x="460" y="580" width="30" height="38" rx="3" class="lb-win-glow-1" />
+        <rect x="510" y="580" width="30" height="38" rx="3" class="lb-win-glow-2" />
+        <path d="M 680,820 L 695,460 L 710,820 M 665,500 H 725 M 670,550 H 720" stroke="#6b4c1b" stroke-width="3" fill="none" />
+        <path class="lb-lightning-bolt" d="M 695,450 L 675,485 L 700,495 L 680,540" stroke="url(#lb-lightningGrad)" stroke-width="3.5" fill="none" filter="url(#lb-intenseGlow)" />
+        <text x="570" y="870" class="lb-section-title" fill="#d35400"><tspan class="lb-section-num" fill="#f39c12">2ª</tspan> • ELÉTRICA</text>
       </g>
-      <!-- ERA 3 — Automação (engrenagens) -->
-      <g>
-        <rect x="740" y="420" width="220" height="220" fill="url(#era3g)"/>
-        <g transform="translate(820,360)">
-          <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="8s" repeatCount="indefinite"/>
-            <circle r="34" fill="none" stroke="#5dcaa5" stroke-width="10"/>
-            <g fill="#5dcaa5"><rect x="-5" y="-44" width="10" height="14"/><rect x="-5" y="30" width="10" height="14"/><rect x="-44" y="-5" width="14" height="10"/><rect x="30" y="-5" width="14" height="10"/></g>
+      <!-- ESPAÇO CENTRAL LIVRE PARA O CARD DE LOGIN -->
+      <!-- 3ª AUTOMAÇÃO -->
+      <g id="lb-sec-automacao">
+        <rect x="1200" y="520" width="220" height="300" rx="12" fill="#10322f" opacity="0.9" stroke="#14b8a6" stroke-width="1.5" />
+        <g transform="translate(1260, 720)">
+          <rect x="-35" y="80" width="70" height="20" rx="5" fill="#14b8a6" />
+          <circle cx="0" cy="50" r="14" fill="#1e293b" stroke="#2dd4bf" stroke-width="3" />
+          <g class="lb-arm-base-pivot">
+            <line x1="0" y1="50" x2="35" y2="-25" stroke="#2dd4bf" stroke-width="12" stroke-linecap="round" />
+            <g transform="translate(35, -25)" class="lb-arm-forearm-pivot">
+              <line x1="0" y1="0" x2="65" y2="-10" stroke="#14b8a6" stroke-width="8" stroke-linecap="round" />
+              <line class="lb-welding-spark" x1="75" y1="12" x2="95" y2="55" stroke="#5eead4" stroke-width="3" filter="url(#lb-intenseGlow)" />
+            </g>
           </g>
         </g>
-        <g transform="translate(890,410)">
-          <g><animateTransform attributeName="transform" type="rotate" from="360 0 0" to="0 0 0" dur="6s" repeatCount="indefinite"/>
-            <circle r="26" fill="none" stroke="#3b9e8f" stroke-width="8"/>
-            <g fill="#3b9e8f"><rect x="-4" y="-34" width="8" height="12"/><rect x="-4" y="22" width="8" height="12"/><rect x="-34" y="-4" width="12" height="8"/><rect x="22" y="-4" width="12" height="8"/></g>
-          </g>
-        </g>
-        <text x="850" y="680" text-anchor="middle" fill="#3b9e8f" font-family="Orbitron,monospace" font-size="22" font-weight="900">3ª · AUTOMAÇÃO</text>
+        <line x1="1180" y1="800" x2="1500" y2="800" stroke="#0f766e" stroke-width="8" />
+        <line class="lb-conveyor-belt-items" x1="1180" y1="800" x2="1500" y2="800" stroke="#5eead4" stroke-width="5" />
+        <text x="1350" y="870" class="lb-section-title" fill="#0d9488"><tspan class="lb-section-num" fill="#14b8a6">3ª</tspan> • AUTOMAÇÃO</text>
       </g>
-      <!-- ERA 4 — Digital (circuitos e dados) -->
-      <g>
-        <rect x="1060" y="400" width="240" height="240" fill="url(#era4g)"/>
-        <g stroke="#a78bfa" stroke-width="3" fill="none" opacity=".8">
-          <path d="M1090 460 H1150 V510 H1210"><animate attributeName="stroke-dasharray" values="0 200;200 0" dur="3s" repeatCount="indefinite"/></path>
-          <path d="M1270 450 V520 H1180"><animate attributeName="stroke-dasharray" values="200 0;0 200" dur="3.5s" repeatCount="indefinite"/></path>
+      <!-- 4ª DIGITAL -->
+      <g id="lb-sec-digital">
+        <rect x="1530" y="480" width="280" height="340" rx="10" fill="#181236" stroke="#6d28d9" stroke-width="2" opacity="0.95" />
+        <g fill="none" stroke="#a855f7" stroke-width="3" stroke-linecap="round" filter="url(#lb-softGlow)">
+          <path class="lb-circuit-line" d="M 1550,540 H 1640 L 1680,580 V 740 H 1750" />
+          <path class="lb-circuit-line" d="M 1770,520 V 620 L 1720,670 H 1570" stroke="#6366f1" />
         </g>
-        <g fill="#c9b8ff">
-          <circle cx="1090" cy="460" r="6"><animate attributeName="opacity" values="1;.3;1" dur="1.5s" repeatCount="indefinite"/></circle>
-          <circle cx="1210" cy="510" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
-          <circle cx="1270" cy="450" r="6"><animate attributeName="opacity" values="1;.3;1" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="1180" cy="560" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.8s" repeatCount="indefinite"/></circle>
+        <g stroke-linecap="round" filter="url(#lb-glow)">
+          <line class="lb-network-link" x1="1540" y1="340" x2="1710" y2="380" stroke="#38bdf8" stroke-width="2" />
+          <line class="lb-network-link" x1="1540" y1="340" x2="1640" y2="250" stroke="#c084fc" stroke-width="2" />
+          <line class="lb-network-link" x1="1710" y1="380" x2="1640" y2="250" stroke="#ec4899" stroke-width="2" />
         </g>
-        <text x="1180" y="680" text-anchor="middle" fill="#a78bfa" font-family="Orbitron,monospace" font-size="22" font-weight="900">4ª · DIGITAL</text>
+        <g class="lb-drone-group-1">
+          <polygon points="-10,15 10,15 35,140 -35,140" fill="url(#lb-droneBeam)" opacity="0.5"/>
+          <ellipse cx="0" cy="0" rx="22" ry="8" fill="#2e1065" stroke="#38bdf8" stroke-width="2" />
+          <circle cx="0" cy="-2" r="5" fill="#38bdf8" filter="url(#lb-glow)" />
+          <line class="lb-rotor" x1="-50" y1="-7" x2="-26" y2="-7" stroke="#38bdf8" stroke-width="2" />
+          <line class="lb-rotor" x1="26" y1="-7" x2="50" y2="-7" stroke="#38bdf8" stroke-width="2" />
+        </g>
+        <g class="lb-drone-group-2">
+          <polygon points="-10,12 10,12 25,100 -25,100" fill="url(#lb-droneBeam)" opacity="0.4"/>
+          <ellipse cx="0" cy="0" rx="20" ry="7" fill="#1e1b4b" stroke="#ec4899" stroke-width="2" />
+          <circle cx="0" cy="-2" r="4" fill="#ec4899" filter="url(#lb-glow)" />
+          <line class="lb-rotor" x1="-44" y1="-6" x2="-24" y2="-6" stroke="#a855f7" stroke-width="2" />
+          <line class="lb-rotor" x1="24" y1="-6" x2="44" y2="-6" stroke="#a855f7" stroke-width="2" />
+        </g>
+        <g class="lb-drone-group-3">
+          <ellipse cx="0" cy="0" rx="18" ry="6" fill="#1e1538" stroke="#a855f7" stroke-width="2" />
+          <circle cx="0" cy="-2" r="4" fill="#c084fc" filter="url(#lb-glow)" />
+          <line class="lb-rotor" x1="-38" y1="-6" x2="-22" y2="-6" stroke="#38bdf8" stroke-width="2" />
+          <line class="lb-rotor" x1="22" y1="-6" x2="38" y2="-6" stroke="#38bdf8" stroke-width="2" />
+        </g>
+        <text x="1680" y="870" class="lb-section-title" fill="#8b5cf6"><tspan class="lb-section-num" fill="#c084fc">4ª</tspan> • DIGITAL</text>
       </g>
     </svg>
     <div style="position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 50% 50%, transparent, rgba(20,16,42,.85))"></div>
@@ -7286,91 +7377,179 @@ function renderAlunoApp(){
 // BLOCO 5 — gera o SVG de fundo conforme a era do aluno (vapor→elétrica→automação→digital)
 function fundoEraSVG(era){
   const cor = COLOR_ERA[era];
-  // base comum: linha do solo + campos cultivados (setor PRIMÁRIO) presente em todas as eras
+  // solo comum + grade sutil de fundo (presente em todas as eras)
   const solo = `
     <rect x="0" y="540" width="800" height="60" fill="#0d0a22" opacity=".6"/>
+    <g opacity=".22" stroke="#2a2050" stroke-width="1">
+      <path d="M0,200 H800 M0,360 H800"/>
+      <path d="M130,0 V600 M400,0 V600 M670,0 V600"/>
+    </g>
     <g opacity=".25">
       <path d="M0 545 Q 40 535 80 545 T 160 545 T 240 545 T 320 545" stroke="#3fb89e" stroke-width="2" fill="none"/>
       <path d="M480 548 Q 520 538 560 548 T 640 548 T 720 548 T 800 548" stroke="#3fb89e" stroke-width="2" fill="none"/>
     </g>`;
+  const style = `
+    <style>
+      @keyframes ebSmokeRise{0%{transform:translateY(0) scale(.4);opacity:.8}50%{opacity:.55}100%{transform:translateY(-160px) scale(2);opacity:0}}
+      .eb-smoke1{animation:ebSmokeRise 3.6s infinite linear;transform-box:fill-box;transform-origin:center bottom}
+      .eb-smoke2{animation:ebSmokeRise 3.6s infinite linear 1.2s;transform-box:fill-box;transform-origin:center bottom}
+      .eb-smoke3{animation:ebSmokeRise 3.6s infinite linear 2.4s;transform-box:fill-box;transform-origin:center bottom}
+      @keyframes ebGear{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+      @keyframes ebGearRev{from{transform:rotate(360deg)}to{transform:rotate(0)}}
+      .eb-gear{animation:ebGear 10s linear infinite;transform-box:fill-box;transform-origin:center}
+      .eb-gear-rev{animation:ebGearRev 8s linear infinite;transform-box:fill-box;transform-origin:center}
+      @keyframes ebWin1{0%,100%{opacity:.85}30%{opacity:.25}}
+      @keyframes ebWin2{0%,100%{opacity:.25}40%{opacity:.9}}
+      .eb-win1{animation:ebWin1 3.2s infinite ease-in-out}
+      .eb-win2{animation:ebWin2 4s infinite ease-in-out 1s}
+      @keyframes ebBolt{0%,86%,100%{opacity:0;stroke-dashoffset:90}90%,95%{opacity:1;stroke-dashoffset:0}}
+      .eb-bolt{stroke-dasharray:90;animation:ebBolt 4.5s infinite ease-out}
+      @keyframes ebArm{0%,100%{transform:rotate(0)}25%{transform:rotate(-16deg)}60%{transform:rotate(10deg)}}
+      @keyframes ebForearm{0%,100%{transform:rotate(0)}30%{transform:rotate(22deg)}70%{transform:rotate(-12deg)}}
+      @keyframes ebSpark{0%,100%{opacity:.1}20%,30%{opacity:1}}
+      @keyframes ebBelt{0%{stroke-dashoffset:0}100%{stroke-dashoffset:-40}}
+      .eb-armbase{animation:ebArm 5.5s ease-in-out infinite;transform-box:fill-box;transform-origin:bottom center}
+      .eb-forearm{animation:ebForearm 5.5s ease-in-out infinite;transform-box:fill-box;transform-origin:center left}
+      .eb-spark{animation:ebSpark 1.4s infinite ease-in-out}
+      .eb-belt{stroke-dasharray:10 10;animation:ebBelt 1.8s linear infinite}
+      @keyframes ebData{0%{stroke-dashoffset:160;opacity:.2}50%{opacity:1}100%{stroke-dashoffset:0;opacity:.2}}
+      .eb-circuit{stroke-dasharray:160;animation:ebData 2.6s linear infinite}
+      @keyframes ebDrone1{0%,100%{transform:translate(560px,120px)}50%{transform:translate(590px,145px)}}
+      @keyframes ebDrone2{0%,100%{transform:translate(670px,180px)}50%{transform:translate(645px,155px)}}
+      @keyframes ebRotor{0%{transform:scaleX(1)}50%{transform:scaleX(.15)}100%{transform:scaleX(1)}}
+      @keyframes ebNet{0%,100%{stroke-dashoffset:80;opacity:.2}50%{stroke-dashoffset:0;opacity:1}}
+      .eb-drone1{animation:ebDrone1 7s ease-in-out infinite}
+      .eb-drone2{animation:ebDrone2 8s ease-in-out infinite}
+      .eb-rotor{animation:ebRotor .12s linear infinite;transform-box:fill-box;transform-origin:center}
+      .eb-net{stroke-dasharray:10 6;animation:ebNet 2.3s linear infinite}
+    </style>`;
+  const defs = `
+    <defs>
+      <radialGradient id="eraGlow" cx="50%" cy="0%" r="90%">
+        <stop offset="0%" stop-color="${cor}" stop-opacity=".12"/>
+        <stop offset="100%" stop-color="${cor}" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="eb-smokeGrad" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#cfc4d8" stop-opacity=".55"/>
+        <stop offset="100%" stop-color="#cfc4d8" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="eb-boltGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff"/><stop offset="50%" stop-color="#fde047"/><stop offset="100%" stop-color="#eab308"/>
+      </linearGradient>
+      <linearGradient id="eb-droneBeam" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#38bdf8" stop-opacity=".6"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+      </linearGradient>
+      <filter id="eb-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>`;
   const cenarios = {
-    // ERA 1 — VAPOR · economia primária→secundária nascente (fazenda + 1ª fábrica)
-    1: `<g opacity=".5">
-        <!-- setor primário: plantação -->
+    // ERA 1 — VAPOR · fábrica de tijolos com 2 chaminés fumegantes + engrenagem grande
+    1: `<g opacity=".55">
         <g opacity=".4" stroke="#6a8a3d" stroke-width="3" fill="none">
-          <path d="M500 530 V500 M520 530 V498 M540 530 V502 M560 530 V496 M580 530 V500 M600 530 V498 M620 530 V502 M640 530 V500"/>
+          <path d="M520 530 V500 M545 530 V498 M570 530 V502 M595 530 V496 M620 530 V500"/>
         </g>
-        <!-- setor secundário: primeira fábrica a vapor -->
-        <rect x="100" y="380" width="180" height="160" fill="#6a512c" opacity=".55"/>
-        <rect x="130" y="300" width="26" height="80" fill="#5a4424"/><rect x="180" y="280" width="26" height="100" fill="#5a4424"/>
-        <circle cx="143" cy="290" r="16" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="290;255;290" dur="4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".3;.08;.3" dur="4s" repeatCount="indefinite"/></circle>
-        <circle cx="193" cy="270" r="18" fill="#cfc4d8" opacity=".3"><animate attributeName="cy" values="270;230;270" dur="5s" repeatCount="indefinite"/><animate attributeName="opacity" values=".3;.08;.3" dur="5s" repeatCount="indefinite"/></circle>
-        <rect x="120" y="450" width="30" height="40" fill="#3a2c18"/><rect x="175" y="450" width="30" height="40" fill="#3a2c18"/><rect x="230" y="450" width="30" height="40" fill="#3a2c18"/>
+        <rect x="90" y="360" width="220" height="180" fill="#3a2418" opacity=".8"/>
+        <rect x="90" y="360" width="220" height="10" fill="#241610"/>
+        <rect x="120" y="300" width="30" height="70" fill="#2d1d15"/>
+        <rect x="190" y="270" width="34" height="100" fill="#2d1d15"/>
+        <g transform="translate(135,300)">
+          <circle class="eb-smoke1" cx="0" cy="0" r="16" fill="url(#eb-smokeGrad)"/>
+          <circle class="eb-smoke2" cx="0" cy="0" r="20" fill="url(#eb-smokeGrad)"/>
+          <circle class="eb-smoke3" cx="0" cy="0" r="24" fill="url(#eb-smokeGrad)"/>
+        </g>
+        <g transform="translate(207,270)">
+          <circle class="eb-smoke1" cx="0" cy="0" r="18" fill="url(#eb-smokeGrad)"/>
+          <circle class="eb-smoke2" cx="0" cy="0" r="22" fill="url(#eb-smokeGrad)"/>
+        </g>
+        <rect x="130" y="470" width="34" height="70" fill="#1c110b"/><rect x="185" y="470" width="34" height="70" fill="#1c110b"/><rect x="240" y="470" width="34" height="70" fill="#1c110b"/>
+        <g transform="translate(670,470)" class="eb-gear" fill="#6a512c" opacity=".7">
+          <path d="M0 -38 L8 -38 L10 -28 A32 32 0 0 1 22 -23 L31 -28 L38 -20 L31 -11 A32 32 0 0 1 34 4 L43 10 L38 20 L28 18 A32 32 0 0 1 22 28 L26 38 L18 42 L11 32 A32 32 0 0 1 -4 35 L-10 43 L-20 38 L-18 28 A32 32 0 0 1 -28 22 L-38 26 L-42 18 L-32 11 A32 32 0 0 1 -35 -4 L-43 -10 L-38 -20 L-28 -18 A32 32 0 0 1 -22 -28 L-26 -38 L-18 -42 L-11 -32 A32 32 0 0 1 4 -35 Z"/>
+          <circle cx="0" cy="0" r="13" fill="#0d0a22"/>
+        </g>
+        <g transform="translate(605,505)" class="eb-gear-rev" fill="#523e26" opacity=".6">
+          <path d="M0 -24 L5 -24 L6 -18 A20 20 0 0 1 14 -15 L19 -18 L24 -13 L19 -7 A20 20 0 0 1 21 3 L27 6 L24 13 L18 11 A20 20 0 0 1 14 17 L16 24 L11 26 L7 20 A20 20 0 0 1 -3 22 L-6 27 L-13 24 L-11 18 A20 20 0 0 1 -17 14 L-24 16 L-26 11 L-20 7 A20 20 0 0 1 -22 -3 L-27 -6 L-24 -13 L-18 -11 A20 20 0 0 1 -14 -17 L-16 -24 L-11 -26 L-7 -20 A20 20 0 0 1 3 -22 Z"/>
+        </g>
       </g>`,
-    // ERA 2 — ELÉTRICA · indústria a pleno (setor secundário forte) + comércio surgindo
-    2: `<g opacity=".5">
-        <!-- setor secundário: fábricas elétricas iluminadas -->
-        <rect x="90" y="340" width="200" height="200" fill="#9a7420" opacity=".45"/>
-        <rect x="115" y="370" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="2s" repeatCount="indefinite"/></rect>
-        <rect x="170" y="370" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".2;.6;.2" dur="2.3s" repeatCount="indefinite"/></rect>
-        <rect x="225" y="370" width="34" height="44" fill="#fff3c4" opacity=".6"><animate attributeName="opacity" values=".6;.2;.6" dur="1.8s" repeatCount="indefinite"/></rect>
-        <rect x="115" y="445" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="170" y="445" width="34" height="44" fill="#fff3c4" opacity=".5"/><rect x="225" y="445" width="34" height="44" fill="#fff3c4" opacity=".5"/>
-        <!-- poste elétrico -->
-        <line x1="330" y1="320" x2="330" y2="540" stroke="#5a4420" stroke-width="5"/><line x1="305" y1="340" x2="355" y2="340" stroke="#5a4420" stroke-width="4"/>
-        <!-- setor terciário: loja/comércio surgindo -->
-        <rect x="560" y="430" width="140" height="110" fill="#8a6420" opacity=".4"/>
-        <rect x="575" y="450" width="110" height="26" fill="#e0a92e" opacity=".5"/>
-        <text x="630" y="470" text-anchor="middle" fill="#fff8d0" font-size="14" opacity=".6">🏪</text>
+    // ERA 2 — VAPOR→ELÉTRICA · fábrica iluminada, poste, raio caindo
+    2: `<g opacity=".55">
+        <rect x="90" y="340" width="230" height="200" fill="#4a3818" opacity=".65"/>
+        <rect x="115" y="370" width="36" height="46" rx="2" class="eb-win1" fill="#fff3c4"/>
+        <rect x="170" y="370" width="36" height="46" rx="2" class="eb-win2" fill="#fff3c4"/>
+        <rect x="225" y="370" width="36" height="46" rx="2" class="eb-win1" fill="#fff3c4"/>
+        <rect x="115" y="445" width="36" height="46" rx="2" class="eb-win2" fill="#fff3c4" opacity=".8"/>
+        <rect x="170" y="445" width="36" height="46" rx="2" class="eb-win1" fill="#fff3c4" opacity=".8"/>
+        <rect x="225" y="445" width="36" height="46" rx="2" class="eb-win2" fill="#fff3c4" opacity=".8"/>
+        <path d="M400,540 L410,380 L420,540 M385,400 H435 M390,440 H430" stroke="#6b4c1b" stroke-width="3" fill="none"/>
+        <path class="eb-bolt" d="M410,370 L392,405 L415,415 L397,455" stroke="url(#eb-boltGrad)" stroke-width="3" fill="none" filter="url(#eb-glow)"/>
+        <g transform="translate(650,470)" class="eb-gear" fill="#9a7420" opacity=".55">
+          <path d="M0 -34 L7 -34 L9 -25 A28 28 0 0 1 20 -20 L28 -25 L34 -18 L28 -10 A28 28 0 0 1 30 3 L38 9 L34 18 L25 16 A28 28 0 0 1 20 25 L23 34 L15 37 L10 28 A28 28 0 0 1 -3 31 L-9 38 L-18 34 L-16 25 A28 28 0 0 1 -25 20 L-34 23 L-37 15 L-28 10 A28 28 0 0 1 -31 -3 L-38 -9 L-34 -18 L-25 -16 A28 28 0 0 1 -20 -25 L-23 -34 L-15 -37 L-10 -28 A28 28 0 0 1 3 -31 Z"/>
+        </g>
       </g>`,
-    // ERA 3 — AUTOMAÇÃO · maquinário + logística (secundário automatizado + terciário cresce)
-    3: `<g opacity=".5">
-        <!-- engrenagens (automação industrial) -->
-        <g transform="translate(180,360)">
-          <g><animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="9s" repeatCount="indefinite"/>
-            <circle r="40" fill="none" stroke="#3fb89e" stroke-width="12" opacity=".5"/>
-            <g fill="#3fb89e" opacity=".5"><rect x="-6" y="-52" width="12" height="16"/><rect x="-6" y="36" width="12" height="16"/><rect x="-52" y="-6" width="16" height="12"/><rect x="36" y="-6" width="16" height="12"/></g>
+    // ERA 3 — AUTOMAÇÃO · braço robótico soldando + esteira com itens em movimento
+    3: `<g opacity=".55">
+        <rect x="480" y="380" width="200" height="160" rx="10" fill="#10322f" opacity=".55" stroke="#14b8a6" stroke-width="1.5"/>
+        <g transform="translate(535,540)">
+          <rect x="-30" y="70" width="60" height="16" rx="4" fill="#14b8a6" opacity=".7"/>
+          <circle cx="0" cy="45" r="12" fill="#1e293b" stroke="#2dd4bf" stroke-width="3"/>
+          <g class="eb-armbase">
+            <line x1="0" y1="45" x2="30" y2="-18" stroke="#2dd4bf" stroke-width="10" stroke-linecap="round"/>
+            <g transform="translate(30,-18)" class="eb-forearm">
+              <line x1="0" y1="0" x2="55" y2="-8" stroke="#14b8a6" stroke-width="7" stroke-linecap="round"/>
+              <line class="eb-spark" x1="63" y1="10" x2="80" y2="45" stroke="#5eead4" stroke-width="2.5" filter="url(#eb-glow)"/>
+            </g>
           </g>
         </g>
-        <g transform="translate(270,420)">
-          <g><animateTransform attributeName="transform" type="rotate" from="360 0 0" to="0 0 0" dur="7s" repeatCount="indefinite"/>
-            <circle r="30" fill="none" stroke="#1f6e60" stroke-width="9" opacity=".5"/>
-            <g fill="#1f6e60" opacity=".5"><rect x="-5" y="-40" width="10" height="14"/><rect x="-5" y="26" width="10" height="14"/><rect x="-40" y="-5" width="14" height="10"/><rect x="26" y="-5" width="14" height="10"/></g>
-          </g>
+        <line x1="470" y1="530" x2="700" y2="530" stroke="#0f766e" stroke-width="7"/>
+        <line class="eb-belt" x1="470" y1="530" x2="700" y2="530" stroke="#5eead4" stroke-width="4"/>
+        <g transform="translate(140,470)" class="eb-gear" fill="#3fb89e" opacity=".55">
+          <path d="M0 -34 L7 -34 L9 -25 A28 28 0 0 1 20 -20 L28 -25 L34 -18 L28 -10 A28 28 0 0 1 30 3 L38 9 L34 18 L25 16 A28 28 0 0 1 20 25 L23 34 L15 37 L10 28 A28 28 0 0 1 -3 31 L-9 38 L-18 34 L-16 25 A28 28 0 0 1 -25 20 L-34 23 L-37 15 L-28 10 A28 28 0 0 1 -31 -3 L-38 -9 L-34 -18 L-25 -16 A28 28 0 0 1 -20 -25 L-23 -34 L-15 -37 L-10 -28 A28 28 0 0 1 3 -31 Z"/>
+          <circle cx="0" cy="0" r="11" fill="#0d0a22"/>
         </g>
-        <!-- setor terciário: centro comercial / serviços -->
-        <rect x="540" y="400" width="180" height="140" fill="#1f6e60" opacity=".35"/>
-        <rect x="560" y="420" width="40" height="120" fill="#3fb89e" opacity=".3"/><rect x="610" y="420" width="40" height="120" fill="#3fb89e" opacity=".3"/><rect x="660" y="420" width="40" height="120" fill="#3fb89e" opacity=".3"/>
-        <!-- caminhão de logística -->
-        <text x="430" y="510" font-size="28" opacity=".5">🚚</text>
+        <g transform="translate(210,510)" class="eb-gear-rev" fill="#1f6e60" opacity=".5">
+          <path d="M0 -22 L5 -22 L6 -16 A18 18 0 0 1 13 -13 L17 -16 L22 -11 L17 -6 A18 18 0 0 1 19 3 L24 6 L22 11 L16 10 A18 18 0 0 1 13 15 L15 22 L10 24 L7 18 A18 18 0 0 1 -3 20 L-6 24 L-11 22 L-10 16 A18 18 0 0 1 -15 13 L-22 15 L-24 10 L-18 6 A18 18 0 0 1 -20 -3 L-24 -6 L-22 -11 L-16 -10 A18 18 0 0 1 -13 -15 L-15 -22 L-10 -24 L-6 -18 A18 18 0 0 1 3 -20 Z"/>
+        </g>
       </g>`,
-    // ERA 4 — DIGITAL · economia do conhecimento (terciário/quaternário, dados, serviços digitais)
+    // ERA 4 — DIGITAL · circuitos pulsantes + arranha-céu de vidro + drones com feixe
     4: `<g opacity=".6">
-        <!-- circuitos / fluxo de dados -->
-        <g stroke="#a78bfa" stroke-width="2.5" fill="none" opacity=".6">
-          <path d="M90 400 H180 V470 H280"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="3s" repeatCount="indefinite"/></path>
-          <path d="M360 380 V460 H260"><animate attributeName="stroke-dasharray" values="300 0;0 300" dur="3.5s" repeatCount="indefinite"/></path>
-          <path d="M560 420 H660 V480"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="4s" repeatCount="indefinite"/></path>
-        </g>
-        <g fill="#c9b8ff" opacity=".7">
-          <circle cx="90" cy="400" r="6"><animate attributeName="opacity" values="1;.3;1" dur="1.5s" repeatCount="indefinite"/></circle>
-          <circle cx="280" cy="470" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
-          <circle cx="360" cy="380" r="6"><animate attributeName="opacity" values="1;.3;1" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="660" cy="480" r="6"><animate attributeName="opacity" values=".3;1;.3" dur="1.8s" repeatCount="indefinite"/></circle>
-        </g>
-        <!-- arranha-céus de vidro (cidade digital) -->
         <g opacity=".3">
-          <rect x="480" y="360" width="50" height="180" fill="#6d4fd8"/><rect x="540" y="320" width="50" height="220" fill="#7c5cfc"/><rect x="600" y="390" width="50" height="150" fill="#6d4fd8"/>
-          <g fill="#c9b8ff" opacity=".5"><rect x="490" y="375" width="12" height="12"/><rect x="510" y="375" width="12" height="12"/><rect x="550" y="335" width="12" height="12"/><rect x="570" y="335" width="12" height="12"/></g>
+          <rect x="500" y="330" width="50" height="210" fill="#6d4fd8"/><rect x="560" y="290" width="55" height="250" fill="#7c5cfc"/><rect x="625" y="360" width="45" height="180" fill="#6d4fd8"/>
+          <g fill="#c9b8ff" opacity=".5">
+            <rect x="512" y="350" width="10" height="10"/><rect x="530" y="350" width="10" height="10"/>
+            <rect x="574" y="310" width="10" height="10"/><rect x="592" y="310" width="10" height="10"/>
+            <rect x="574" y="345" width="10" height="10"/><rect x="592" y="345" width="10" height="10"/>
+          </g>
+        </g>
+        <g fill="none" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round">
+          <path class="eb-circuit" d="M90,400 H180 V470 H280"/>
+          <path class="eb-circuit" d="M360,380 V460 H260" stroke="#6366f1"/>
+        </g>
+        <g fill="#c9b8ff">
+          <circle cx="90" cy="400" r="5"><animate attributeName="opacity" values="1;.3;1" dur="1.5s" repeatCount="indefinite"/></circle>
+          <circle cx="280" cy="470" r="5"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+        </g>
+        <g stroke-linecap="round">
+          <line class="eb-net" x1="560" y1="130" x2="660" y2="185" stroke="#38bdf8" stroke-width="2"/>
+          <line class="eb-net" x1="560" y1="130" x2="600" y2="200" stroke="#c084fc" stroke-width="2"/>
+        </g>
+        <g class="eb-drone1">
+          <polygon points="-8,10 8,10 24,95 -24,95" fill="url(#eb-droneBeam)" opacity=".5"/>
+          <ellipse cx="0" cy="0" rx="16" ry="6" fill="#2e1065" stroke="#38bdf8" stroke-width="2"/>
+          <circle cx="0" cy="-2" r="4" fill="#38bdf8" filter="url(#eb-glow)"/>
+          <line class="eb-rotor" x1="-36" y1="-5" x2="-19" y2="-5" stroke="#38bdf8" stroke-width="2"/>
+          <line class="eb-rotor" x1="19" y1="-5" x2="36" y2="-5" stroke="#38bdf8" stroke-width="2"/>
+        </g>
+        <g class="eb-drone2">
+          <ellipse cx="0" cy="0" rx="14" ry="5" fill="#1e1538" stroke="#a855f7" stroke-width="2"/>
+          <circle cx="0" cy="-2" r="3.5" fill="#c084fc" filter="url(#eb-glow)"/>
+          <line class="eb-rotor" x1="-30" y1="-5" x2="-17" y2="-5" stroke="#38bdf8" stroke-width="2"/>
+          <line class="eb-rotor" x1="17" y1="-5" x2="30" y2="-5" stroke="#38bdf8" stroke-width="2"/>
         </g>
       </g>`
   };
   return `<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0" preserveAspectRatio="xMidYMid slice" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <radialGradient id="eraGlow" cx="50%" cy="0%" r="90%">
-        <stop offset="0%" stop-color="${cor}" stop-opacity=".10"/>
-        <stop offset="100%" stop-color="${cor}" stop-opacity="0"/>
-      </radialGradient>
-    </defs>
+    ${defs}
+    ${style}
     <rect width="800" height="600" fill="url(#eraGlow)"/>
     ${solo}
     ${cenarios[era]||cenarios[1]}
