@@ -2514,18 +2514,57 @@ function showMsg(msg, color){
 // significado delas.
 // ══════════════════════════════════════════════════════════════════
 const PALETAS_FARME = {
+  // ── ESCUROS (originais) ──
   roxo:{nome:'Roxo Cósmico',bg:'#141228',bg2:'#1d1b3a',bg3:'#252247',bg4:'#2d2a52',bg5:'#363263',
-    text:'#f0eeff',muted:'#8d86bd',muted2:'#b3adda',purple:'#8b5cf6',purple2:'#a78bfa',purple3:'rgba(139,92,246,.18)'},
+    text:'#f0eeff',muted:'#8d86bd',muted2:'#b3adda',purple:'#8b5cf6',purple2:'#a78bfa',purple3:'rgba(139,92,246,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
   azul:{nome:'Azul Nebulosa',bg:'#0e1730',bg2:'#152140',bg3:'#1c2c52',bg4:'#243761',bg5:'#2c4372',
-    text:'#eaf1ff',muted:'#7d93c4',muted2:'#a8bce3',purple:'#3b82f6',purple2:'#7cb0ff',purple3:'rgba(59,130,246,.18)'},
+    text:'#eaf1ff',muted:'#7d93c4',muted2:'#a8bce3',purple:'#3b82f6',purple2:'#7cb0ff',purple3:'rgba(59,130,246,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
   verde:{nome:'Verde Alpha',bg:'#0e1f1a',bg2:'#152b23',bg3:'#1c372c',bg4:'#244434',bg5:'#2c513e',
-    text:'#eafff6',muted:'#77b89b',muted2:'#a6d9c1',purple:'#22c9a0',purple2:'#6ee7c8',purple3:'rgba(34,201,160,.18)'},
+    text:'#eafff6',muted:'#77b89b',muted2:'#a6d9c1',purple:'#22c9a0',purple2:'#6ee7c8',purple3:'rgba(34,201,160,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
   marte:{nome:'Vermelho Marte',bg:'#241412',bg2:'#341c19',bg3:'#452622',bg4:'#57312b',bg5:'#693d35',
-    text:'#fff0ec',muted:'#c48d7e',muted2:'#e0b3a4',purple:'#f2704a',purple2:'#ff9d76',purple3:'rgba(242,112,74,.18)'},
+    text:'#fff0ec',muted:'#c48d7e',muted2:'#e0b3a4',purple:'#f2704a',purple2:'#ff9d76',purple3:'rgba(242,112,74,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
   solar:{nome:'Dourado Solar',bg:'#221a0d',bg2:'#332612',bg3:'#453419',bg4:'#584322',bg5:'#6b532b',
-    text:'#fff8e6',muted:'#c4a86a',muted2:'#e0c98f',purple:'#e0a92e',purple2:'#ffd166',purple3:'rgba(224,169,46,.18)'},
+    text:'#fff8e6',muted:'#c4a86a',muted2:'#e0c98f',purple:'#e0a92e',purple2:'#ffd166',purple3:'rgba(224,169,46,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
   rosa:{nome:'Rosa Nova',bg:'#1f1024',bg2:'#2c1734',bg3:'#3a1f45',bg4:'#492757',bg5:'#583069',
-    text:'#ffeefc',muted:'#c088c9',muted2:'#e2b3e6',purple:'#ec4899',purple2:'#f9a8d4',purple3:'rgba(236,72,153,.18)'}
+    text:'#ffeefc',muted:'#c088c9',muted2:'#e2b3e6',purple:'#ec4899',purple2:'#f9a8d4',purple3:'rgba(236,72,153,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
+
+  // ── PASTEL / CLAROS (novos) ──
+  rosabebe:{nome:'💗 Rosa Bebê',bg:'#fdf3f7',bg2:'#fce7ef',bg3:'#fad3e3',bg4:'#f7bdd6',bg5:'#f3a3c5',
+    text:'#5c2340',muted:'#a9637f',muted2:'#7d3f5b',purple:'#f472b6',purple2:'#ec4899',purple3:'rgba(244,114,182,.20)',
+    border:'rgba(92,35,64,0.10)',border2:'rgba(92,35,64,0.16)',border3:'rgba(92,35,64,0.24)'},
+  rosachiclete:{nome:'🍬 Rosa Chiclete',bg:'#fef1f8',bg2:'#fce0f1',bg3:'#f9c6e5',bg4:'#f5a5d4',bg5:'#f183c1',
+    text:'#5a1a45',muted:'#a8517e',muted2:'#822f60',purple:'#ec4899',purple2:'#f472b6',purple3:'rgba(236,72,153,.22)',
+    border:'rgba(90,26,69,0.10)',border2:'rgba(90,26,69,0.16)',border3:'rgba(90,26,69,0.24)'},
+  sakura:{nome:'🌸 Sakura',bg:'#fff5f7',bg2:'#ffe9ee',bg3:'#ffd6e0',bg4:'#ffbdcd',bg5:'#ffa3b8',
+    text:'#6b2c3a',muted:'#b57685',muted2:'#8a4553',purple:'#fb7185',purple2:'#fda4af',purple3:'rgba(251,113,133,.20)',
+    border:'rgba(107,44,58,0.10)',border2:'rgba(107,44,58,0.16)',border3:'rgba(107,44,58,0.24)'},
+  menta:{nome:'🌿 Menta Pastel',bg:'#f2fbf7',bg2:'#e2f6ec',bg3:'#c9eedb',bg4:'#aee4c8',bg5:'#93d9b5',
+    text:'#164a34',muted:'#5c9b7c',muted2:'#347356',purple:'#2dd4a3',purple2:'#5eead4',purple3:'rgba(45,212,163,.20)',
+    border:'rgba(22,74,52,0.10)',border2:'rgba(22,74,52,0.16)',border3:'rgba(22,74,52,0.24)'},
+  ceu:{nome:'☁️ Céu Pastel',bg:'#f2f8fd',bg2:'#e3f0fb',bg3:'#cae3f7',bg4:'#adcff2',bg5:'#8fbcec',
+    text:'#123a5e',muted:'#5c85ab',muted2:'#345f85',purple:'#3b9eea',purple2:'#7cc0f5',purple3:'rgba(59,158,234,.20)',
+    border:'rgba(18,58,94,0.10)',border2:'rgba(18,58,94,0.16)',border3:'rgba(18,58,94,0.24)'},
+  lilas:{nome:'💜 Lilás Suave',bg:'#f8f5fd',bg2:'#eee5fb',bg3:'#ded0f5',bg4:'#ccb8ef',bg5:'#b99fe8',
+    text:'#3d2569',muted:'#8a76b8',muted2:'#5f4593',purple:'#a78bfa',purple2:'#c4b5fd',purple3:'rgba(167,139,250,.22)',
+    border:'rgba(61,37,105,0.10)',border2:'rgba(61,37,105,0.16)',border3:'rgba(61,37,105,0.24)'},
+  pessego:{nome:'🍑 Pêssego',bg:'#fef6f0',bg2:'#fdead9',bg3:'#fbd8bd',bg4:'#f8c3a0',bg5:'#f5ad83',
+    text:'#6b3512',muted:'#b97f52',muted2:'#8a5228',purple:'#f2994a',purple2:'#f7b573',purple3:'rgba(242,153,74,.20)',
+    border:'rgba(107,53,18,0.10)',border2:'rgba(107,53,18,0.16)',border3:'rgba(107,53,18,0.24)'},
+  limao:{nome:'🍋 Limão Suave',bg:'#fdfbee',bg2:'#faf5d3',bg3:'#f5ecac',bg4:'#efe184',bg5:'#e9d75c',
+    text:'#4a4108',muted:'#a89a3f',muted2:'#7a6d1e',purple:'#d4c02e',purple2:'#e6d454',purple3:'rgba(212,192,46,.22)',
+    border:'rgba(74,65,8,0.10)',border2:'rgba(74,65,8,0.16)',border3:'rgba(74,65,8,0.24)'},
+  turquesa:{nome:'🩵 Turquesa Pastel',bg:'#effbfb',bg2:'#dcf4f4',bg3:'#bfe9ea',bg4:'#9fdcde',bg5:'#7ecfd2',
+    text:'#0d4a4c',muted:'#569699',muted2:'#2e6e71',purple:'#22b8bd',purple2:'#5ed3d7',purple3:'rgba(34,184,189,.20)',
+    border:'rgba(13,74,76,0.10)',border2:'rgba(13,74,76,0.16)',border3:'rgba(13,74,76,0.24)'},
+  coral:{nome:'🪸 Coral Suave',bg:'#fef4f2',bg2:'#fde3de',bg3:'#fbc9c0',bg4:'#f8ac9f',bg5:'#f58f7e',
+    text:'#6b2318',muted:'#bd6f5f',muted2:'#8f4535',purple:'#f2705a',purple2:'#f79a89',purple3:'rgba(242,112,90,.20)',
+    border:'rgba(107,35,24,0.10)',border2:'rgba(107,35,24,0.16)',border3:'rgba(107,35,24,0.24)'}
 };
 function aplicarPaletaFarme(key){
   const p=PALETAS_FARME[key]||PALETAS_FARME.roxo;const r=document.documentElement.style;
@@ -2533,6 +2572,7 @@ function aplicarPaletaFarme(key){
   r.setProperty('--bg4',p.bg4);r.setProperty('--bg5',p.bg5);
   r.setProperty('--text',p.text);r.setProperty('--muted',p.muted);r.setProperty('--muted2',p.muted2);
   r.setProperty('--purple',p.purple);r.setProperty('--purple2',p.purple2);r.setProperty('--purple3',p.purple3);
+  if(p.border){r.setProperty('--border',p.border);r.setProperty('--border2',p.border2);r.setProperty('--border3',p.border3);}
   localStorage.setItem('farme_paleta_preview',key);
 }
 // aplica na hora (preview instantâneo do localStorage) antes mesmo do login responder,
@@ -2544,19 +2584,26 @@ function aplicarPaletaFarme(key){
 
 function openTemaCores(role){
   const atual = role==='prof' ? (currentProf?.paleta||'roxo') : (CU?.paleta||'roxo');
-  const grid = Object.entries(PALETAS_FARME).map(([k,p])=>`
-    <div onclick="escolherPaletaFarme('${k}','${role}')" style="cursor:pointer;border:2px solid ${k===atual?p.purple:'transparent'};border-radius:12px;padding:10px;text-align:center;background:${p.bg2};transition:.15s">
+  const escurosKeys = ['roxo','azul','verde','marte','solar','rosa'];
+  const pastelKeys = ['rosabebe','rosachiclete','sakura','menta','ceu','lilas','pessego','limao','turquesa','coral'];
+  const swatch = k => {
+    const p = PALETAS_FARME[k];
+    return `<div onclick="escolherPaletaFarme('${k}','${role}')" style="cursor:pointer;border:2px solid ${k===atual?p.purple:'transparent'};border-radius:12px;padding:9px;text-align:center;background:${p.bg2};transition:.15s">
       <div style="display:flex;gap:4px;justify-content:center;margin-bottom:6px">
-        <span style="width:20px;height:20px;border-radius:50%;background:${p.purple}"></span>
-        <span style="width:20px;height:20px;border-radius:50%;background:${p.bg4}"></span>
-        <span style="width:20px;height:20px;border-radius:50%;background:${p.bg}"></span>
+        <span style="width:18px;height:18px;border-radius:50%;background:${p.purple}"></span>
+        <span style="width:18px;height:18px;border-radius:50%;background:${p.bg4}"></span>
+        <span style="width:18px;height:18px;border-radius:50%;background:${p.bg}"></span>
       </div>
-      <div style="font-size:11.5px;font-weight:700;color:${p.text}">${p.nome}${k===atual?' ✓':''}</div>
-    </div>`).join('');
+      <div style="font-size:11px;font-weight:700;color:${p.text}">${p.nome}${k===atual?' ✓':''}</div>
+    </div>`;
+  };
   const html = `
     <div class="modal-t">🎨 Tema de Cores</div>
     <div class="modal-s">Escolha a paleta da sua experiência. Salva automaticamente e é só sua — cada aluno e o professor têm a própria.</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0">${grid}</div>
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">Escuros</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${escurosKeys.map(swatch).join('')}</div>
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">Pastéis</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${pastelKeys.map(swatch).join('')}</div>
     <div class="modal-ft"><button class="btn" onclick="closeM('m-tema-cores')">Fechar</button></div>`;
   document.getElementById('m-tema-cores-body').innerHTML = html;
   openM('m-tema-cores');
