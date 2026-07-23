@@ -1171,6 +1171,11 @@ input, textarea, select{ font-size:14px; }
   <div class="bw" id="bw"></div>
 </div>
 
+<!-- MODAL TEMA DE CORES -->
+<div class="modal-bg" id="m-tema-cores">
+  <div class="modal" id="m-tema-cores-body"></div>
+</div>
+
 <!-- MODAL NOVA TURMA -->
 <div class="modal-bg" id="m-turma">
   <div class="modal">
@@ -2501,9 +2506,82 @@ function showMsg(msg, color){
   showNotif(msg);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// TEMA DE CORES (v3) — professor e aluno escolhem sua paleta, cada um
+// a sua. Só o fundo/texto/acento geral da interface muda — as cores
+// de status (dourado=lendário, verde=sucesso, vermelho=perigo) e as
+// cores das Eras (COLOR_ERA) continuam fixas, para não perder o
+// significado delas.
+// ══════════════════════════════════════════════════════════════════
+const PALETAS_FARME = {
+  roxo:{nome:'Roxo Cósmico',bg:'#141228',bg2:'#1d1b3a',bg3:'#252247',bg4:'#2d2a52',bg5:'#363263',
+    text:'#f0eeff',muted:'#8d86bd',muted2:'#b3adda',purple:'#8b5cf6',purple2:'#a78bfa',purple3:'rgba(139,92,246,.18)'},
+  azul:{nome:'Azul Nebulosa',bg:'#0e1730',bg2:'#152140',bg3:'#1c2c52',bg4:'#243761',bg5:'#2c4372',
+    text:'#eaf1ff',muted:'#7d93c4',muted2:'#a8bce3',purple:'#3b82f6',purple2:'#7cb0ff',purple3:'rgba(59,130,246,.18)'},
+  verde:{nome:'Verde Alpha',bg:'#0e1f1a',bg2:'#152b23',bg3:'#1c372c',bg4:'#244434',bg5:'#2c513e',
+    text:'#eafff6',muted:'#77b89b',muted2:'#a6d9c1',purple:'#22c9a0',purple2:'#6ee7c8',purple3:'rgba(34,201,160,.18)'},
+  marte:{nome:'Vermelho Marte',bg:'#241412',bg2:'#341c19',bg3:'#452622',bg4:'#57312b',bg5:'#693d35',
+    text:'#fff0ec',muted:'#c48d7e',muted2:'#e0b3a4',purple:'#f2704a',purple2:'#ff9d76',purple3:'rgba(242,112,74,.18)'},
+  solar:{nome:'Dourado Solar',bg:'#221a0d',bg2:'#332612',bg3:'#453419',bg4:'#584322',bg5:'#6b532b',
+    text:'#fff8e6',muted:'#c4a86a',muted2:'#e0c98f',purple:'#e0a92e',purple2:'#ffd166',purple3:'rgba(224,169,46,.18)'},
+  rosa:{nome:'Rosa Nova',bg:'#1f1024',bg2:'#2c1734',bg3:'#3a1f45',bg4:'#492757',bg5:'#583069',
+    text:'#ffeefc',muted:'#c088c9',muted2:'#e2b3e6',purple:'#ec4899',purple2:'#f9a8d4',purple3:'rgba(236,72,153,.18)'}
+};
+function aplicarPaletaFarme(key){
+  const p=PALETAS_FARME[key]||PALETAS_FARME.roxo;const r=document.documentElement.style;
+  r.setProperty('--bg',p.bg);r.setProperty('--bg2',p.bg2);r.setProperty('--bg3',p.bg3);
+  r.setProperty('--bg4',p.bg4);r.setProperty('--bg5',p.bg5);
+  r.setProperty('--text',p.text);r.setProperty('--muted',p.muted);r.setProperty('--muted2',p.muted2);
+  r.setProperty('--purple',p.purple);r.setProperty('--purple2',p.purple2);r.setProperty('--purple3',p.purple3);
+  localStorage.setItem('farme_paleta_preview',key);
+}
+// aplica na hora (preview instantâneo do localStorage) antes mesmo do login responder,
+// pra não piscar o tema padrão sempre que a página carrega
+(function(){ try{
+  const cache=localStorage.getItem('farme_paleta_preview');
+  if(cache && PALETAS_FARME[cache]) aplicarPaletaFarme(cache);
+}catch(e){} })();
+
+function openTemaCores(role){
+  const atual = role==='prof' ? (currentProf?.paleta||'roxo') : (CU?.paleta||'roxo');
+  const grid = Object.entries(PALETAS_FARME).map(([k,p])=>`
+    <div onclick="escolherPaletaFarme('${k}','${role}')" style="cursor:pointer;border:2px solid ${k===atual?p.purple:'transparent'};border-radius:12px;padding:10px;text-align:center;background:${p.bg2};transition:.15s">
+      <div style="display:flex;gap:4px;justify-content:center;margin-bottom:6px">
+        <span style="width:20px;height:20px;border-radius:50%;background:${p.purple}"></span>
+        <span style="width:20px;height:20px;border-radius:50%;background:${p.bg4}"></span>
+        <span style="width:20px;height:20px;border-radius:50%;background:${p.bg}"></span>
+      </div>
+      <div style="font-size:11.5px;font-weight:700;color:${p.text}">${p.nome}${k===atual?' ✓':''}</div>
+    </div>`).join('');
+  const html = `
+    <div class="modal-t">🎨 Tema de Cores</div>
+    <div class="modal-s">Escolha a paleta da sua experiência. Salva automaticamente e é só sua — cada aluno e o professor têm a própria.</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0">${grid}</div>
+    <div class="modal-ft"><button class="btn" onclick="closeM('m-tema-cores')">Fechar</button></div>`;
+  document.getElementById('m-tema-cores-body').innerHTML = html;
+  openM('m-tema-cores');
+}
+async function escolherPaletaFarme(key, role){
+  aplicarPaletaFarme(key);
+  if(role==='prof'){
+    if(currentProf) currentProf.paleta = key;
+    try{ await apiFetch('/api/db?action=save-profile', {paleta:key}); }catch(e){}
+  } else {
+    if(CU) CU.paleta = key;
+    try{
+      await fetch(`${API_BASE}/api/student?action=update`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({login:studentLogin||CU.login,senha:studentSenha||CU.senha,patch:{paleta:key}})});
+    }catch(e){}
+  }
+  openTemaCores(role); // re-render com a nova seleção marcada
+}
+
 function startApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('show');
+  // v3 — aplica a paleta de cores salva (professor ou aluno)
+  const paletaSalva = CR==='professor' ? (currentProf?.paleta||'roxo') : (CU?.paleta||'roxo');
+  aplicarPaletaFarme(paletaSalva);
   const disc=currentProf?.disciplina||'FARME AURA';
   document.querySelector('.tl').textContent=disc;
   document.getElementById('t-role').textContent=CR==='professor'?'PROFESSOR':'ALUNO';
@@ -2585,9 +2663,14 @@ function updateAuraTop(){
 // ==============================
 function renderProfApp(){
   const isMaster=isMasterProf();
+  const farmeAberto=localStorage.getItem('sb_farme_open')==='1';
   document.getElementById('bw').innerHTML=`
     <div class="sidebar">
-      <div class="sb-sec">${CU.disciplina||'FARME AURA'}</div>
+      <div class="sb-sec" onclick="toggleFarmeMenu()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
+        <span>${CU.disciplina||'FARME AURA'}</span>
+        <span id="sb-farme-arrow" style="transition:transform .18s;transform:rotate(${farmeAberto?90:0}deg);font-size:10px">▶</span>
+      </div>
+      <div id="sb-farme-menu" style="overflow:hidden;max-height:${farmeAberto?'400px':'0'};transition:max-height .22s ease">
       <div class="t-tab ${!CTid?'active':''}" onclick="showProfHome()" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--gold)"></div>
         <span style="font-size:12px">🏠 Início & Horário</span>
@@ -2612,7 +2695,14 @@ function renderProfApp(){
         <div class="tdot" style="background:var(--green)"></div>
         <span style="font-size:12px">📊 Exportar Dados</span>
       </div>
-      <div class="sb-sec" style="margin-top:8px">Turmas</div>
+      <div class="t-tab" onclick="openTemaCores('prof')" style="margin:0 8px 4px">
+        <div class="tdot" style="background:var(--purple2)"></div>
+        <span style="font-size:12px">🎨 Tema de Cores</span>
+      </div>
+      </div>
+      <div class="sb-sec" style="margin-top:4px;display:flex;align-items:center;justify-content:space-between">
+        <span>Turmas</span><span id="sb-turmas-count" style="color:var(--muted2);font-weight:700"></span>
+      </div>
       <div class="sb-list" id="sb-list"></div>
       <div class="sb-ft" style="display:flex;flex-direction:column;gap:6px">
         <button class="btn-new" id="btn-nt" onclick="openM('m-turma')">+ NOVA TURMA</button>
@@ -2622,6 +2712,13 @@ function renderProfApp(){
     <div class="main" id="main-area"></div>`;
   renderSB();
   showProfHome();
+}
+function toggleFarmeMenu(){
+  const menu=document.getElementById('sb-farme-menu'), arrow=document.getElementById('sb-farme-arrow');
+  const abrindo = menu.style.maxHeight==='0px'||menu.style.maxHeight==='';
+  menu.style.maxHeight = abrindo ? '400px' : '0';
+  arrow.style.transform = abrindo ? 'rotate(90deg)' : 'rotate(0deg)';
+  localStorage.setItem('sb_farme_open', abrindo?'1':'0');
 }
 
 function showProfHome(){
@@ -3121,6 +3218,8 @@ function renderSB(){
     </div>`).join('')||'<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Nenhuma turma</div>';
   const btn=document.getElementById('btn-nt');
   if(btn)btn.disabled=turmas.length>=15;
+  const cnt=document.getElementById('sb-turmas-count');
+  if(cnt)cnt.textContent=turmas.length?turmas.length:'';
 }
 
 let deletarTurmaId=null;
@@ -8053,7 +8152,10 @@ function renderASide(){
         <div class="char-badge">✏️</div>
       </div>
       <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:${a.char?.color||'var(--purple2)'}">${a.char?.apelido||a.nome.split(' ')[0].toUpperCase()}</div>
-      <button class="btn" style="font-size:10.5px;padding:4px 12px" onclick="openChar3D()">🧍 Personagem 3D</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn" style="font-size:10.5px;padding:4px 12px" onclick="openChar3D()">🧍 Personagem 3D</button>
+        <button class="btn" style="font-size:10.5px;padding:4px 10px" onclick="openTemaCores('aluno')" title="Tema de Cores">🎨</button>
+      </div>
       ${siegeBannerAlunoHtml()}
     </div>
 
