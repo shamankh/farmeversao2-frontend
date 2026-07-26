@@ -1885,7 +1885,26 @@ function addEgoLog(turma, entry){
 const HEART_MAX = 3;                  // 3 interações por semana
 const SUPER_QUEST_MAX = 3;
 const SESSION_DURATION_MS = 25*60*1000; // 25 minutos por interação
-const SESSION_MAX_AURA = 4.000;       // Cap por interação (em aura, escala 0-100)
+const SESSION_MAX_AURA = 2.000;       // Cap por interação (em aura, escala 0-100)
+
+// v3 — parser único e confiável da pontuação final do Calvão.
+// Tenta primeiro a tag nova "PONTOS_FINAIS: X.XXX" (muito mais estável entre
+// modelos de IA diferentes); se não achar, cai pro regex antigo em texto livre
+// como rede de segurança (compatibilidade com respostas já em andamento).
+function parseFinalScore(reply){
+  if(!reply) return null;
+  const tagMatch = reply.match(/PONTOS?_FINAIS?\s*:?\s*([\d]+[.,]?\d*)/i);
+  if(tagMatch){
+    let v = parseFloat(tagMatch[1].replace(',','.'));
+    if(!isNaN(v)) return v;
+  }
+  const oldMatch = reply.match(/AVALIA[ÇC][AÃ]O(?:\s+FINAL)?(?:\s+DA?\s+\w+(?:\s+\d+)?)?[:\s—\-]*\w+[\s—\-:.,]*pontua[çc][aã]o(?:\s+base)?[:\s]*([\d.,]+)/i);
+  if(oldMatch){
+    let v = parseFloat(oldMatch[1].replace(',','.'));
+    if(!isNaN(v)) return v;
+  }
+  return null;
+}
 const WEEKLY_CALVAO_CAP = 12.000;     // Cap semanal via Calvão (em aura)
 // PATCH 9.4 — Atividades gamificadas (GitHub)
 const WEEKLY_ATIVIDADE_PTS_CAP = 3000;  // Máx 3.000 pontos de atividade por semana
@@ -8921,12 +8940,13 @@ function renderMissaoContent(){
             <div class="ai-dot"></div>
             <div class="chat-hi">
               <div class="h">Calvão de crIA</div>
-              <div class="s">Sessão de 25 minutos · 0 a 4,000 pontos</div>
+              <div class="s">Sessão de 25 minutos · 0 a 2,000 pontos</div>
             </div>
           </div>
           <div class="chat-msgs" id="chat-msgs"></div>
           <div class="chat-in-row">
-            <textarea class="chat-in" id="chat-in" rows="1" placeholder="Digite sua resposta... (Enter para enviar, Shift+Enter para quebrar linha)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"></textarea>
+            <textarea class="chat-in" id="chat-in" rows="1" placeholder="Digite (ou fale 🎤) sua resposta com suas palavras... (Enter para enviar)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}" onpaste="return bloquearColar(event)" oncontextmenu="return bloquearColar(event)"></textarea>
+            <button class="send-btn" id="mic-btn" onclick="toggleDitado()" title="Falar em vez de escrever" style="background:var(--bg4);border:1px solid var(--border2);min-width:44px">🎤</button>
             <button class="send-btn" id="send-btn" onclick="sendMsg()">ENVIAR</button>
           </div>
         </div>
@@ -9001,7 +9021,7 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
         <div style="font-size:56px;margin-bottom:14px">🎯</div>
         <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900;margin-bottom:8px">Pronto para farmar?</div>
         <div style="font-size:13px;color:var(--muted2);margin-bottom:6px;line-height:1.5;max-width:380px;margin-left:auto;margin-right:auto">
-          <strong style="color:var(--green2)">♾️ Farme livre:</strong> ganhe até <strong style="color:var(--gold)">4,000 aura</strong> por sessão.<br>
+          <strong style="color:var(--green2)">♾️ Farme livre:</strong> ganhe até <strong style="color:var(--gold)">2,000 aura</strong> por sessão.<br>
           A sessão dura <strong>25 minutos</strong>. Você pode pausar a qualquer momento.
         </div>
         <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin:14px 0 18px;font-size:12px;color:var(--muted)">
@@ -9799,60 +9819,70 @@ function updateMissionTimerUI(){
   }
 }
 
+// v3 — avaliação final forçada (reaproveitável): usada tanto quando o timer de
+// 25min expira quanto pela rede de segurança que detecta a Pergunta 7/7 sem
+// pontuação entregue pela IA. Garante que o aluno SEMPRE recebe o que farmou.
+async function forcarAvaliacaoFinal(){
+  showTyping();
+  try{
+    const sysFinal = `Você é o Calvão de crIA. A sessão do aluno chegou ao fim e você precisa dar uma AVALIAÇÃO FINAL agora, baseado no que ele respondeu até aqui. Faça um parágrafo curto de feedback e termine a mensagem, na última linha sozinha, com a tag exata "PONTOS_FINAIS: X.XXX".
+
+PRINCÍPIO: aluno do Ensino Médio que se esforçou MERECE reconhecimento. Seja generoso quando o aluno engajou, mesmo que a escrita seja simples. Cap desta missão é 2,000 aura. Faixas:
+- INADEQUADO (não respondeu, trolou): 0.100 a 0.250
+- SUPERFICIAL (tentou mas raso): 0.500 a 0.900
+- PARCIAL (engajou com raciocínio próprio): 1.000 a 1.400
+- COMPLETO (respondeu tudo bem): 1.500 a 1.800
+- EXCELENTE (domínio claro do tema): 1.900 a 2.000
+
+Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além disso. A tag "PONTOS_FINAIS: X.XXX" é OBRIGATÓRIA, sozinha na última linha.`;
+    const r = await fetch(`${API_BASE}/api/ai`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        login: studentLogin || CU.login,
+        senha: studentSenha || CU.senha,
+        system: sysFinal,
+        messages: chatHistory.slice(-6)
+      })
+    });
+    const data = await r.json();
+    const reply = data.reply || '';
+    removeTyping();
+    addAIMsg(reply);
+    chatHistory.push({role:'assistant',content:reply});
+    const scoreParsed = parseFinalScore(reply);
+    if(scoreParsed !== null){
+      let basePts = scoreParsed;
+      if(basePts >= 100) basePts = basePts/1000;
+      if(basePts >= 10) basePts = basePts/100;
+      if(basePts > SESSION_MAX_AURA) basePts = SESSION_MAX_AURA;
+      if(basePts < 0) basePts = 0;
+      const xCount = getXCount(CU);
+      const hasPenaltyBoost = !!(CU.penaltyBoost && CU.penaltyUntil && Date.now()<CU.penaltyUntil);
+      let finalPts = applyMultiplier(basePts, xCount, hasPenaltyBoost);
+      const restante = getCalvaoRemainingThisWeek(CU);
+      if(finalPts > restante) finalPts = parseFloat(restante.toFixed(3));
+      if(finalPts > 0){
+        changeAura(CU, finalPts);
+        addCalvaoEarned(CU, finalPts);
+        missionAccumulatedAura = finalPts;
+        showNotif(`+${fmtAura(finalPts)} aura!`);
+      }
+      return true;
+    }
+    return false;
+  }catch(e){
+    removeTyping();
+    console.warn('forcarAvaliacaoFinal error:', e);
+    return false;
+  }
+}
+
 async function endMissionByTimer(){
   stopMissionTimer();
   // Tenta pedir uma avaliação final automática à IA antes de finalizar
   const hadEvaluation = missionAccumulatedAura > 0;
   if(!hadEvaluation && chatHistory.length >= 2){
-    // Pede avaliação automática
-    showTyping();
-    try{
-      const sysFinal = `Você é o Calvão de crIA. A sessão de 25 minutos do aluno acabou e você precisa dar uma AVALIAÇÃO FINAL agora, baseado no que ele respondeu até aqui. Use o formato: "AVALIAÇÃO FINAL: [INADEQUADO/SUPERFICIAL/PARCIAL/COMPLETO/EXCELENTE] — pontuação base: X,XXX aura". 
-
-PRINCÍPIO: aluno do Ensino Médio que se esforçou MERECE reconhecimento. Seja generoso quando o aluno engajou, mesmo que a escrita seja simples. Faixas:
-- INADEQUADO (não respondeu, trolou): 0,200 a 0,500
-- SUPERFICIAL (tentou mas raso): 1,000 a 1,800
-- PARCIAL (engajou com raciocínio próprio): 2,000 a 2,800
-- COMPLETO (respondeu tudo bem): 3,000 a 3,600
-- EXCELENTE (domínio claro do tema): 3,800 a 4,000
-
-Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além disso.`;
-      const r = await fetch(`${API_BASE}/api/ai`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          login: studentLogin || CU.login,
-          senha: studentSenha || CU.senha,
-          system: sysFinal,
-          messages: chatHistory.slice(-6)
-        })
-      });
-      const data = await r.json();
-      const reply = data.reply || '';
-      removeTyping();
-      // Parse AVALIAÇÃO FINAL
-      const finalMatch = reply.match(/AVALIA[ÇC][AÃ]O(?:\s+FINAL)?(?:\s+DA?\s+\w+(?:\s+\d+)?)?[:\s—\-]*\w+[\s—\-:.,]*pontua[çc][aã]o(?:\s+base)?[:\s]*([\d.,]+)/i);
-      if(finalMatch){
-        let basePts = parseFloat(finalMatch[1].replace(',','.'));
-        if(basePts >= 100) basePts = basePts/1000;
-        if(basePts >= 10) basePts = basePts/100;
-        if(basePts > SESSION_MAX_AURA) basePts = SESSION_MAX_AURA;
-        if(basePts < 0) basePts = 0;
-        const xCount = getXCount(CU);
-        const hasPenaltyBoost = !!(CU.penaltyBoost && CU.penaltyUntil && Date.now()<CU.penaltyUntil);
-        let finalPts = applyMultiplier(basePts, xCount, hasPenaltyBoost);
-        // Cap semanal
-        const restante = getCalvaoRemainingThisWeek(CU);
-        if(finalPts > restante) finalPts = parseFloat(restante.toFixed(3));
-        if(finalPts > 0){
-          changeAura(CU, finalPts);
-          addCalvaoEarned(CU, finalPts);
-          missionAccumulatedAura = finalPts;
-        }
-      }
-    }catch(e){
-      removeTyping();
-      console.warn('endMissionByTimer evaluation error:', e);
-    }
+    await forcarAvaliacaoFinal();
   }
   
   missionActive = false;
@@ -10107,6 +10137,61 @@ function showTyping(){
 }
 function removeTyping(){ const t=document.getElementById('typing-ind'); if(t)t.remove(); }
 
+// v3 — bloqueia colar/menu de contexto na caixa de resposta ao Calvão: o aluno
+// deve escrever (ou ditar) com as próprias palavras, não colar o que copiou da
+// internet. Isso é sobre APRENDIZADO, não sobre desconfiar do aluno — por isso
+// o aviso é gentil, não acusatório.
+let _avisoColarMostrado = false;
+function bloquearColar(event){
+  event.preventDefault();
+  if(!_avisoColarMostrado){
+    showNotif('✍️ Aqui é pra escrever com suas palavras! Se preferir, usa o 🎤 pra falar em vez de digitar.');
+    _avisoColarMostrado = true;
+    setTimeout(()=>{_avisoColarMostrado=false;}, 4000);
+  }
+  return false;
+}
+
+// v3 — ditado por voz (Web Speech API): alternativa a digitar, não a colar.
+let _reconhecimentoVoz = null, _ditando = false;
+function toggleDitado(){
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micBtn = document.getElementById('mic-btn');
+  const input = document.getElementById('chat-in');
+  if(!SpeechRecognition){
+    showNotif('⚠️ Seu navegador não suporta ditado por voz. Tenta pelo Chrome.');
+    return;
+  }
+  if(_ditando){
+    if(_reconhecimentoVoz) _reconhecimentoVoz.stop();
+    return;
+  }
+  _reconhecimentoVoz = new SpeechRecognition();
+  _reconhecimentoVoz.lang = 'pt-BR';
+  _reconhecimentoVoz.interimResults = false;
+  _reconhecimentoVoz.maxAlternatives = 1;
+  _reconhecimentoVoz.onstart = ()=>{
+    _ditando = true;
+    if(micBtn){ micBtn.textContent='🔴'; micBtn.style.background='rgba(229,62,62,.25)'; micBtn.style.borderColor='var(--red2)'; }
+    showNotif('🎤 Ouvindo... fala aí!');
+  };
+  _reconhecimentoVoz.onresult = (e)=>{
+    const texto = e.results[0][0].transcript;
+    if(input){
+      input.value = (input.value ? input.value.trim()+' ' : '') + texto;
+      input.focus();
+    }
+  };
+  _reconhecimentoVoz.onerror = (e)=>{
+    if(e.error !== 'no-speech') showNotif('⚠️ Não consegui entender. Tenta de novo?');
+  };
+  _reconhecimentoVoz.onend = ()=>{
+    _ditando = false;
+    if(micBtn){ micBtn.textContent='🎤'; micBtn.style.background='var(--bg4)'; micBtn.style.borderColor='var(--border2)'; }
+  };
+  _reconhecimentoVoz.start();
+}
+
 async function sendMsg(){
   if(isAITyping)return;
   if(isMissionPaused()){ showNotif('⏸️ Retome a missão para continuar.'); return; }
@@ -10148,13 +10233,14 @@ IDENTIDADE: você é jovem no espírito, usa linguagem informal mas inteligente,
 ${isSQ ? `=== MODO SUPER QUEST ===
 Sessão de revisão de atividade avaliativa. Faça 5 a 7 perguntas sobre o conteúdo da atividade, em ordem. Tom animado: "Bora ver o que você lembrou!", "Boa, segue!", "Tranquilo, explica de novo com suas palavras".
 
-Ao final, avalie com generosidade:
-- Engajou e tentou (mesmo que simples): "AVALIAÇÃO FINAL: COMPLETO — pontuação base: 2,000 aura"
-- Participou pouco, respostas rasas: "AVALIAÇÃO FINAL: PARCIAL — pontuação base: 1,000 aura"
-- Não respondeu ou claramente trolando: "AVALIAÇÃO FINAL: INADEQUADO — pontuação base: 0,200 aura"
+Ao final, avalie com generosidade e SEMPRE termine com a tag exata em linha própria (além do feedback em texto normal):
+- Engajou e tentou (mesmo que simples): feedback + "PONTOS_FINAIS: 2.000"
+- Participou pouco, respostas rasas: feedback + "PONTOS_FINAIS: 1.000"
+- Não respondeu ou claramente trolando: feedback + "PONTOS_FINAIS: 0.200"
 
-REGRA: quem tentou com palavras próprias ganha COMPLETO. Não exija perfeição.
-Multiplicadores NÃO se aplicam à Super Quest — valor fixo.` : `=== FLUXO DA MISSÃO ===
+REGRA: quem tentou com palavras próprias ganha o nível de cima. Não exija perfeição.
+Multiplicadores NÃO se aplicam à Super Quest — valor fixo.
+⚠️ A tag "PONTOS_FINAIS: X.XXX" é OBRIGATÓRIA em toda avaliação final, sempre na última linha, sozinha, sem mais nada na mesma linha.` : `=== FLUXO DA MISSÃO ===
 Você tem 7 perguntas da trilha pra fazer em ORDEM. Cada pergunta pode ter no máximo 2 turnos (resposta + 1 reformulação se muito fraca). Depois, AVANÇA — não fica em loop.
 
 RITMO:
@@ -10162,23 +10248,24 @@ RITMO:
 - Resposta muito fraca → "Hmm, tenta de novo — pensa em [dica rápida]?" Uma chance só.
 - 2 turnos feitos → avança mesmo assim
 
-FORMATO DE CADA RESPOSTA SUA:
+FORMATO DE CADA RESPOSTA SUA (enquanto ainda há perguntas):
 1 frase de feedback ("Boa!", "Quase lá.", "Ok, anotado.", "Raso, mas tô te vendo tentar.") + próxima pergunta numerada ("Pergunta 3 de 7:"). NADA mais.
 
-=== AVALIAÇÃO FINAL (após as 7 perguntas) ===
-Faz 1 parágrafo curto celebrando o que o aluno acertou e apontando o que vale revisar. Tom de parceiro, não de professor.
-Depois, NA LINHA SEGUINTE, declara:
-"AVALIAÇÃO FINAL: [nível] — pontuação base: X,XXX aura"
+=== AVALIAÇÃO FINAL (IMEDIATAMENTE após a pergunta 7 ser respondida — nunca faça uma 8ª pergunta) ===
+Assim que o aluno responder a Pergunta 7 de 7, sua PRÓXIMA mensagem PRECISA ser a avaliação final — não pergunte mais nada.
+Faça 1 parágrafo curto celebrando o que o aluno acertou e apontando o que vale revisar. Tom de parceiro, não de professor.
+Depois, na ÚLTIMA LINHA da mensagem, sozinha, sem mais texto junto, escreva a tag exata:
+"PONTOS_FINAIS: X.XXX"
 
-FAIXAS (seja generoso — esforço conta mais que precisão):
-- INADEQUADO (não respondeu, só trolou): 0,200 a 0,500
-- SUPERFICIAL (tentou mas muito raso, poucas palavras, sem raciocínio): 1,000 a 1,800
-- PARCIAL (engajou, respondeu a maioria, raciocínio próprio mesmo com erros): 2,000 a 2,800
-- COMPLETO (respondeu tudo com raciocínio, entendeu o tema mesmo que simples): 3,000 a 3,600
-- EXCELENTE (domínio claro, faz conexões, traz exemplos, se destacou): 3,800 a 4,000
+FAIXAS (cap desta missão é 2,000 aura — seja generoso, esforço conta mais que precisão):
+- INADEQUADO (não respondeu, só trolou): 0.100 a 0.250
+- SUPERFICIAL (tentou mas muito raso, poucas palavras, sem raciocínio): 0.500 a 0.900
+- PARCIAL (engajou, respondeu a maioria, raciocínio próprio mesmo com erros): 1.000 a 1.400
+- COMPLETO (respondeu tudo com raciocínio, entendeu o tema mesmo que simples): 1.500 a 1.800
+- EXCELENTE (domínio claro, faz conexões, traz exemplos, se destacou): 1.900 a 2.000
 
 REGRA DE OURO: na dúvida entre dois níveis → dá o MAIOR. Sua função é reconhecer esforço, não punir redação fraca.
-⚠️ FORMATO OBRIGATÓRIO: "AVALIAÇÃO FINAL: [nível] — pontuação base: X,XXX aura" em linha própria. Use EXATAMENTE "AVALIAÇÃO FINAL".`}
+⚠️ FORMATO OBRIGATÓRIO E INEGOCIÁVEL: a última linha da sua avaliação final tem que ser exatamente "PONTOS_FINAIS: X.XXX" (ponto decimal, 3 casas), sozinha na linha, sem asteriscos, sem mais nada depois. Isso é lido por um programa — se você não seguir esse formato EXATO, o aluno não recebe os pontos.`}
 
 === COMO VOCÊ SE COMPORTA ===
 - Linguagem informal mas inteligente: "que maneiro", "exatamente isso!", "bora", "certo certo", "hmm interessante"
@@ -10314,12 +10401,10 @@ ${text}`;
       }
     }
 
-    // ===== PARSE 3: AVALIAÇÃO FINAL =====
-    // Regex flexível — captura "AVALIAÇÃO:", "AVALIAÇÃO FINAL:", "AVALIAÇÃO FINAL DA AULA 01:", etc.
-    // E também variações de "pontuação base", "pontuação:", "Pontuação base:"
-    const finalMatch = reply.match(/AVALIA[ÇC][AÃ]O(?:\s+FINAL)?(?:\s+DA?\s+\w+(?:\s+\d+)?)?[:\s—\-]*\w+[\s—\-:.,]*pontua[çc][aã]o(?:\s+base)?[:\s]*([\d.,]+)/i);
-    if(finalMatch){
-      let basePts = parseFloat(finalMatch[1].replace(',','.'));
+    // ===== PARSE 3: PONTUAÇÃO FINAL (tag nova + fallback) =====
+    const scoreParsed3 = parseFinalScore(reply);
+    if(scoreParsed3 !== null){
+      let basePts = scoreParsed3;
       // Sanity: se vier em formato 4000 ou 400, converte
       if(basePts >= 100) basePts = basePts/1000;
       if(basePts >= 10) basePts = basePts/100;
@@ -10335,7 +10420,7 @@ ${text}`;
         else if(basePts >= 0.5) finalPts = 1.000;
         else finalPts = 0.200;
       } else {
-        // Missão normal: cap por sessão 4,000
+        // Missão normal: cap por sessão 2,000
         if(basePts > SESSION_MAX_AURA) basePts = SESSION_MAX_AURA;
         // Aplica multiplicador (lógica nova: +200 pts por x, cap 5x)
         finalPts = applyMultiplier(basePts, xCount, hasPenaltyBoost);
@@ -10376,6 +10461,14 @@ ${text}`;
           : `Sessão sem ganhos — tente focar mais no conteúdo da próxima vez.`;
         showNotif(msg);
       }, 800);
+    } else if(!isSQ && missionActive){
+      // v3 — REDE DE SEGURANÇA: a IA já fez a Pergunta 7 de 7 numa mensagem anterior,
+      // mas essa resposta não trouxe a pontuação final (esqueceu/errou o formato).
+      // Em vez de deixar o aluno sem receber o que farmou, força a avaliação agora.
+      const msgAnterior = chatHistory.length >= 3 ? (chatHistory[chatHistory.length-3]?.content || '') : '';
+      if(/pergunta\s*7\s*de\s*7/i.test(msgAnterior)){
+        setTimeout(()=>{ forcarAvaliacaoFinal(); }, 500);
+      }
     }
   }catch(e){
     removeTyping();
@@ -10478,7 +10571,7 @@ function renderRegrasContent(){
       <div class="card" style="margin-bottom:14px">
         <div class="card-t">⚖️ Rubrica de Pontuação por Sessão</div>
         <div style="font-size:13px;color:var(--muted2);line-height:1.7;margin-bottom:8px">
-          A IA avalia cada sessão de 0 a 4,000 pontos (cap por sessão). Soma das interações na sessão:
+          A IA avalia cada sessão de 0 a 2,000 pontos (cap por sessão). Soma das interações na sessão:
         </div>
         <table class="rules-tbl">
           <thead><tr><th>Avaliação</th><th>Pontos base</th></tr></thead>
@@ -10492,7 +10585,7 @@ function renderRegrasContent(){
         </table>
         <div style="background:rgba(124,92,252,.08);border:1px solid var(--border2);border-radius:var(--r);padding:8px 12px;margin-top:10px;font-size:12px;color:var(--muted2)">
           💡 <strong>Multiplicadores:</strong> cada "x" ativo (até 5x) adiciona <strong>+0,200 aura</strong> direto. Em recuperação de penalidade: +10% extra no final.<br>
-          <strong>Cap por sessão:</strong> 4,000 aura — mesmo com multiplicadores.
+          <strong>Cap por sessão:</strong> 2,000 aura — mesmo com multiplicadores.
         </div>
       </div>
 
