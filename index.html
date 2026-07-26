@@ -586,6 +586,34 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
   .a-hamburger-float {
     display: inline-flex !important;
   }
+  /* v3 — painel do PROFESSOR também vira menu retrátil no mobile (mesmo padrão do aluno) */
+  .sidebar {
+    position: fixed !important;
+    top: 0; left: -260px;
+    width: 240px; min-width: 240px;
+    height: 100vh;
+    z-index: 200;
+    transition: left .25s ease;
+    box-shadow: 4px 0 20px rgba(0,0,0,.3);
+  }
+  .sidebar.mobile-open { left: 0; }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 199;
+  }
+  .sidebar-overlay.show { display: block; }
+  .prof-hamburger-float {
+    display: inline-flex !important;
+    align-items: center; gap: 6px;
+    background: linear-gradient(135deg,var(--purple),var(--gold));
+    color: #fff; border: none; padding: 10px 16px; border-radius: var(--r);
+    font-weight: 700; font-size: 13px; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(124,92,246,.35);
+    position: fixed; top: 60px; left: 10px; z-index: 150;
+  }
+  .main { width: 100% !important; }
   .aluno-content {
     height: auto !important;
     overflow-x: hidden !important;
@@ -730,6 +758,8 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 @media (min-width: 769px) {
   .a-hamburger { display: none !important; }
   .a-side-overlay { display: none !important; }
+  .prof-hamburger-float { display: none !important; }
+  .sidebar-overlay { display: none !important; }
   /* PATCH 9.4 — no desktop a navegação fica nas tabs de cima, não na sidebar */
   .a-side-nav { display: none !important; }
 }
@@ -1086,13 +1116,13 @@ input, textarea, select{ font-size:14px; }
       </div>
     </div>
     <div class="role-tabs">
-      <div class="role-tab active" onclick="setRole('professor')">Professor</div>
-      <div class="role-tab" onclick="setRole('aluno')">Aluno</div>
-      <div class="role-tab" onclick="setRole('novo')">+ Novo</div>
+      <div class="role-tab active" data-role="aluno" onclick="setRole('aluno')">Aluno</div>
+      <div class="role-tab" data-role="professor" onclick="setRole('professor')">Professor</div>
+      <div class="role-tab" data-role="novo" onclick="setRole('novo')">+ Novo</div>
     </div>
 
     <!-- PAINEL LOGIN PROFESSOR -->
-    <div class="login-panel active" id="panel-login">
+    <div class="login-panel" id="panel-login">
       <div class="fi"><div class="fl">Email</div><input class="fin" id="lu" type="email" placeholder="seu@email.com" autocomplete="off"></div>
       <div class="fi"><div class="fl">Senha</div><input class="fin" id="lp" type="password" placeholder="sua senha"></div>
       <div class="login-err" id="lerr" style="display:none">Login ou senha incorretos.</div>
@@ -1104,7 +1134,7 @@ input, textarea, select{ font-size:14px; }
     </div>
 
     <!-- PAINEL ALUNO LOGIN -->
-    <div class="login-panel" id="panel-aluno">
+    <div class="login-panel active" id="panel-aluno">
       <div class="fi"><div class="fl">Login do aluno</div><input class="fin" id="alu" placeholder="ex: 7Achristop" autocomplete="off"></div>
       <div class="fi"><div class="fl">Senha</div><input class="fin" id="alp" type="password" placeholder="sua senha"></div>
       <div class="login-err" id="alerr" style="display:none">Login ou senha incorretos.</div>
@@ -2202,7 +2232,7 @@ let CR = null; // current role: 'professor' | 'aluno'
 let CTid = null; // current turma id
 let CTtab = 'alunos';
 let ATab = 'missao';
-let loginRole = 'professor';
+let loginRole = 'aluno';
 let resetTarget = null;
 let deleteTarget = null;
 let penaltyTarget = null;
@@ -2281,8 +2311,8 @@ function trocarGifLogin(){
 
 function setRole(r){
   loginRole=r;
-  document.querySelectorAll('.role-tab').forEach((t,i)=>{
-    t.classList.toggle('active',(i===0&&r==='professor')||(i===1&&r==='aluno')||(i===2&&r==='novo'));
+  document.querySelectorAll('.role-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.role===r);
   });
   const pLogin=document.getElementById('panel-login');
   const pAluno=document.getElementById('panel-aluno');
@@ -2712,37 +2742,39 @@ function renderProfApp(){
   const isMaster=isMasterProf();
   const farmeAberto=localStorage.getItem('sb_farme_open')==='1';
   document.getElementById('bw').innerHTML=`
+    <div class="sidebar-overlay" id="prof-side-overlay" onclick="toggleProfSidebarMobile(false)"></div>
+    <button class="prof-hamburger-float" onclick="toggleProfSidebarMobile()">☰ Menu</button>
     <div class="sidebar">
       <div class="sb-sec" onclick="toggleFarmeMenu()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
         <span>${CU.disciplina||'FARME AURA'}</span>
         <span id="sb-farme-arrow" style="transition:transform .18s;transform:rotate(${farmeAberto?90:0}deg);font-size:10px">▶</span>
       </div>
       <div id="sb-farme-menu" style="overflow:hidden;max-height:${farmeAberto?'400px':'0'};transition:max-height .22s ease">
-      <div class="t-tab ${!CTid?'active':''}" onclick="showProfHome()" style="margin:0 8px 4px">
+      <div class="t-tab ${!CTid?'active':''}" onclick="showProfHome();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--gold)"></div>
         <span style="font-size:12px">🏠 Início & Horário</span>
       </div>
-      ${isMaster?`<div class="t-tab" onclick="openGlobalView()" style="margin:0 8px 4px">
+      ${isMaster?`<div class="t-tab" onclick="openGlobalView();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--green)"></div>
         <span style="font-size:12px">🌍 Alunos Global</span>
       </div>`:''}
-      <div class="t-tab" onclick="openCalvaoCompanheiro()" style="margin:0 8px 4px">
+      <div class="t-tab" onclick="openCalvaoCompanheiro();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--purple)"></div>
         <span style="font-size:12px">🤖 Calvão Companheiro</span>
       </div>
-      <div class="t-tab" onclick="openEventos()" style="margin:0 8px 4px">
+      <div class="t-tab" onclick="openEventos();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--pink,#ff6b9d)"></div>
         <span style="font-size:12px">🎉 Eventos</span>
       </div>
-      <div class="t-tab" onclick="openCodigosProf()" style="margin:0 8px 4px">
+      <div class="t-tab" onclick="openCodigosProf();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--gold)"></div>
         <span style="font-size:12px">🎟️ Códigos Resgate</span>
       </div>
-      <div class="t-tab" onclick="openExportar()" style="margin:0 8px 4px">
+      <div class="t-tab" onclick="openExportar();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--green)"></div>
         <span style="font-size:12px">📊 Exportar Dados</span>
       </div>
-      <div class="t-tab" onclick="openTemaCores('prof')" style="margin:0 8px 4px">
+      <div class="t-tab" onclick="openTemaCores('prof');toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--purple2)"></div>
         <span style="font-size:12px">🎨 Tema de Cores</span>
       </div>
@@ -2752,13 +2784,21 @@ function renderProfApp(){
       </div>
       <div class="sb-list" id="sb-list"></div>
       <div class="sb-ft" style="display:flex;flex-direction:column;gap:6px">
-        <button class="btn-new" id="btn-nt" onclick="openM('m-turma')">+ NOVA TURMA</button>
-        ${isMaster?`<button class="btn-new" style="border-color:rgba(240,180,41,.25);color:var(--gold)" onclick="openSuperAdmin()">👁 SUPER ADMIN</button>`:''}
+        <button class="btn-new" id="btn-nt" onclick="openM('m-turma');toggleProfSidebarMobile(false)">+ NOVA TURMA</button>
+        ${isMaster?`<button class="btn-new" style="border-color:rgba(240,180,41,.25);color:var(--gold)" onclick="openSuperAdmin();toggleProfSidebarMobile(false)">👁 SUPER ADMIN</button>`:''}
       </div>
     </div>
     <div class="main" id="main-area"></div>`;
   renderSB();
   showProfHome();
+}
+function toggleProfSidebarMobile(force){
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('prof-side-overlay');
+  if(!sidebar) return;
+  const abrir = force !== undefined ? force : !sidebar.classList.contains('mobile-open');
+  sidebar.classList.toggle('mobile-open', abrir);
+  if(overlay) overlay.classList.toggle('show', abrir);
 }
 function toggleFarmeMenu(){
   const menu=document.getElementById('sb-farme-menu'), arrow=document.getElementById('sb-farme-arrow');
@@ -3300,7 +3340,7 @@ async function confirmDeletarTurma(){
   } catch(e){ showNotif('Erro ao deletar: '+e.message); }
 }
 
-function selTurma(id){ CTid=id; CTtab='alunos'; renderSB(); renderTurmaView(); }
+function selTurma(id){ CTid=id; CTtab='alunos'; renderSB(); renderTurmaView(); toggleProfSidebarMobile(false); }
 
 function renderTurmaView(){
   const t=DB.turmas.find(x=>x.id===CTid); if(!t)return;
