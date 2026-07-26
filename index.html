@@ -9904,7 +9904,22 @@ function updateMissionTimerUI(){
 // v3 — avaliação final forçada (reaproveitável): usada tanto quando o timer de
 // 25min expira quanto pela rede de segurança que detecta a Pergunta 7/7 sem
 // pontuação entregue pela IA. Garante que o aluno SEMPRE recebe o que farmou.
-async function forcarAvaliacaoFinal(){
+// v3 — estima quantas das 7 perguntas o aluno chegou a responder (pra mostrar
+// no popup de confirmação quando ele encerra antes de terminar a trilha)
+function contarPerguntasRespondidas(){
+  let maxPergunta = 0;
+  chatHistory.forEach(m=>{
+    if(m.role==='assistant'){
+      const mm = (m.content||'').match(/pergunta\s*(\d+)\s*de\s*7/i);
+      if(mm) maxPergunta = Math.max(maxPergunta, parseInt(mm[1],10));
+    }
+  });
+  const userTurns = chatHistory.filter(m=>m.role==='user').length;
+  // se o aluno já respondeu ao turno da última pergunta vista, conta ela; senão, uma a menos
+  return Math.max(0, Math.min(7, maxPergunta ? Math.min(maxPergunta, userTurns) : userTurns));
+}
+
+async function forcarAvaliacaoFinal(contextoExtra){
   showTyping();
   try{
     const sysFinal = `Você é o Calvão de crIA. A sessão do aluno chegou ao fim e você precisa dar uma AVALIAÇÃO FINAL agora, baseado no que ele respondeu até aqui. Faça um parágrafo curto de feedback e termine a mensagem, na última linha sozinha, com a tag exata "PONTOS_FINAIS: X.XXX".
@@ -9923,7 +9938,8 @@ Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além diss
         login: studentLogin || CU.login,
         senha: studentSenha || CU.senha,
         system: sysFinal,
-        messages: chatHistory.slice(-6)
+        messages: chatHistory.slice(-6),
+        maxTokens: 1500
       })
     });
     const data = await r.json();
@@ -9933,12 +9949,12 @@ Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além diss
     chatHistory.push({role:'assistant',content:reply});
     const scoreParsed = parseFinalScore(reply);
     if(scoreParsed !== null && !missionScoreApplied){
-      await aplicarPontuacaoFinal(scoreParsed, {isSQ:false});
+      await aplicarPontuacaoFinal(scoreParsed, {isSQ:false, contexto:contextoExtra});
       return true;
     }
     // sem tag de pontuação: garante que a sessão não fica travada em aberto
     if(!missionScoreApplied){
-      await aplicarPontuacaoFinal(0, {isSQ:false, contexto:'Não deu pra avaliar direito dessa vez — a sessão foi encerrada sem pontos.'});
+      await aplicarPontuacaoFinal(0, {isSQ:false, contexto:contextoExtra||'Não deu pra avaliar direito dessa vez — a sessão foi encerrada sem pontos.'});
     }
     return false;
   }catch(e){
@@ -9989,11 +10005,13 @@ async function endMissionVoluntarily(){
   }
 
   // v3 — ainda não foi avaliado (ex: parou na pergunta 3 de 7): avalia o que já foi
-  // respondido até aqui e dá crédito parcial, com o mesmo popup de confirmação.
+  // respondido até aqui e dá crédito parcial, com o mesmo popup de confirmação,
+  // mostrando quantas das 7 perguntas o aluno chegou a responder.
   stopMissionTimer();
   removeTyping();
   if(chatHistory.length >= 2){
-    await forcarAvaliacaoFinal();
+    const n = contarPerguntasRespondidas();
+    await forcarAvaliacaoFinal(`Você respondeu ${n} de 7 perguntas. Sua pontuação foi:`);
   } else {
     missionScoreApplied = true;
     missionActive = false;
@@ -10414,7 +10432,8 @@ ${text}`;
         login: studentLogin || CU.login,
         senha: studentSenha || CU.senha,
         system: sys,
-        messages: messagesParaIA
+        messages: messagesParaIA,
+        maxTokens: 1500
       })
     });
     const data=await r.json();
@@ -11061,7 +11080,7 @@ Delta positivo=ganho. Delta negativo=perda. Use valores como 0.300, 0.500, 1.000
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         login:'__prof__',senha:profToken||'',
-        system:aiSys,messages:[{role:'user',content:cmd}]
+        system:aiSys,messages:[{role:'user',content:cmd}],maxTokens:1500
       })
     });
     const data=await r.json();
