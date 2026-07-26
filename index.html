@@ -1206,6 +1206,11 @@ input, textarea, select{ font-size:14px; }
   <div class="modal" id="m-tema-cores-body"></div>
 </div>
 
+<!-- MODAL PONTOS GANHOS (v3) -->
+<div class="modal-bg" id="m-pontos-ganhos">
+  <div class="modal" id="m-pontos-ganhos-body" style="max-width:340px"></div>
+</div>
+
 <!-- MODAL NOVA TURMA -->
 <div class="modal-bg" id="m-turma">
   <div class="modal">
@@ -1887,7 +1892,82 @@ const SUPER_QUEST_MAX = 3;
 const SESSION_DURATION_MS = 25*60*1000; // 25 minutos por interação
 const SESSION_MAX_AURA = 2.000;       // Cap por interação (em aura, escala 0-100)
 
-// v3 — parser único e confiável da pontuação final do Calvão.
+// v3 — popup de confirmação: mostra os pontos ganhos e só libera ao clicar OK
+function mostrarPopupPontos(pts, contexto){
+  return new Promise(resolve=>{
+    const corPts = pts>0 ? 'var(--gold)' : 'var(--muted2)';
+    document.getElementById('m-pontos-ganhos-body').innerHTML = `
+      <div style="text-align:center;padding:6px 0">
+        <div style="font-size:46px;margin-bottom:4px">${pts>0?'🎉':'📋'}</div>
+        <div class="modal-t" style="margin-bottom:2px">${pts>0?'Pontuação da Sessão!':'Sessão encerrada'}</div>
+        <div class="modal-s" style="margin-bottom:10px">${contexto||'Veja quanto você ganhou nesta sessão com o Calvão.'}</div>
+        <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:${corPts};margin:10px 0">+${fmtAura(pts)} aura</div>
+        <button class="btn btn-p" style="width:100%;margin-top:6px" id="btn-confirmar-pontos">OK, RECEBER</button>
+      </div>`;
+    openM('m-pontos-ganhos');
+    document.getElementById('btn-confirmar-pontos').onclick = ()=>{
+      closeM('m-pontos-ganhos');
+      resolve();
+    };
+  });
+}
+
+// v3 — ÚNICO ponto de aplicação da pontuação final. Trava contra pontuação
+// dupla (missionScoreApplied), mostra o popup de confirmação, só credita a
+// aura DEPOIS que o aluno clica OK, e sempre fecha a missão ao final.
+async function aplicarPontuacaoFinal(basePtsRaw, opts={}){
+  if(missionScoreApplied) return; // já pontuou esta sessão — ignora qualquer tag repetida
+  missionScoreApplied = true;     // trava JÁ, antes do popup, pra não disparar 2x em paralelo
+  const isSQ = !!opts.isSQ;
+  const contexto = opts.contexto;
+
+  let basePts = basePtsRaw;
+  if(basePts >= 100) basePts = basePts/1000;
+  if(basePts >= 10) basePts = basePts/100;
+  if(basePts < 0) basePts = 0;
+
+  const xCount = getBoostMult();
+  const hasPenaltyBoost = !!(CU.penaltyBoost && CU.penaltyUntil && Date.now()<CU.penaltyUntil);
+  const calvaoRestante = getCalvaoRemainingThisWeek(CU);
+  let finalPts, isCappedBySemana = false;
+
+  if(isSQ){
+    if(basePts >= 1.5) finalPts = 2.000;
+    else if(basePts >= 0.5) finalPts = 1.000;
+    else finalPts = 0.200;
+  } else {
+    if(basePts > SESSION_MAX_AURA) basePts = SESSION_MAX_AURA;
+    finalPts = applyMultiplier(basePts, xCount, hasPenaltyBoost);
+    if(finalPts > calvaoRestante){
+      finalPts = parseFloat(calvaoRestante.toFixed(3));
+      isCappedBySemana = true;
+    }
+  }
+
+  await mostrarPopupPontos(finalPts, contexto);
+
+  if(finalPts > 0){
+    changeAura(CU, finalPts);
+    if(!isSQ) addCalvaoEarned(CU, finalPts);
+    missionAccumulatedAura = finalPts;
+  }
+  CU.missoes=(CU.missoes||0)+1;
+  if(!isSQ && CU.penaltyBoost){ CU.penaltyBoost=false; }
+
+  stopMissionTimer();
+  missionActive = false;
+  await finalizeMission(false);
+
+  let msg = finalPts>0 ? `+${fmtAura(finalPts)} aura!` : (isCappedBySemana
+    ? `⚠️ Cap semanal de ${fmtAura(getWeeklyCalvaoCap())} atingido — seu desempenho contou, mas o teto da semana engoliu os pontos.`
+    : 'Sessão sem ganhos — tente focar mais no conteúdo da próxima vez.');
+  if(isSQ && finalPts>0) msg += ' ⭐ SUPER QUEST';
+  else if(finalPts>0){
+    if(xCount>0) msg += ` (base ${fmtAura(basePts)} +${xCount}x)`;
+    if(hasPenaltyBoost) msg += ' +10% recuperação';
+  }
+  showNotif(msg);
+}
 // Tenta primeiro a tag nova "PONTOS_FINAIS: X.XXX" (muito mais estável entre
 // modelos de IA diferentes); se não achar, cai pro regex antigo em texto livre
 // como rede de segurança (compatibilidade com respostas já em andamento).
@@ -2269,6 +2349,8 @@ let missionPausedAt = null;
 let missionTotalPausedMs = 0;
 let missionEndedByTimer = false;
 let missionAccumulatedAura = 0; // soma de aura ganha turno a turno na sessão atual
+// v3 — trava: só UMA pontuação final é aplicada por sessão, nunca soma duas vezes
+let missionScoreApplied = false;
 let missionTurnEvaluations = []; // {turn, basePts, finalPts, evaluation}
 
 // Aura helpers (5 decimal places stored as integer thousandths * 1000)
@@ -9850,24 +9932,13 @@ Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além diss
     addAIMsg(reply);
     chatHistory.push({role:'assistant',content:reply});
     const scoreParsed = parseFinalScore(reply);
-    if(scoreParsed !== null){
-      let basePts = scoreParsed;
-      if(basePts >= 100) basePts = basePts/1000;
-      if(basePts >= 10) basePts = basePts/100;
-      if(basePts > SESSION_MAX_AURA) basePts = SESSION_MAX_AURA;
-      if(basePts < 0) basePts = 0;
-      const xCount = getXCount(CU);
-      const hasPenaltyBoost = !!(CU.penaltyBoost && CU.penaltyUntil && Date.now()<CU.penaltyUntil);
-      let finalPts = applyMultiplier(basePts, xCount, hasPenaltyBoost);
-      const restante = getCalvaoRemainingThisWeek(CU);
-      if(finalPts > restante) finalPts = parseFloat(restante.toFixed(3));
-      if(finalPts > 0){
-        changeAura(CU, finalPts);
-        addCalvaoEarned(CU, finalPts);
-        missionAccumulatedAura = finalPts;
-        showNotif(`+${fmtAura(finalPts)} aura!`);
-      }
+    if(scoreParsed !== null && !missionScoreApplied){
+      await aplicarPontuacaoFinal(scoreParsed, {isSQ:false});
       return true;
+    }
+    // sem tag de pontuação: garante que a sessão não fica travada em aberto
+    if(!missionScoreApplied){
+      await aplicarPontuacaoFinal(0, {isSQ:false, contexto:'Não deu pra avaliar direito dessa vez — a sessão foi encerrada sem pontos.'});
     }
     return false;
   }catch(e){
@@ -9880,29 +9951,55 @@ Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além diss
 async function endMissionByTimer(){
   stopMissionTimer();
   // Tenta pedir uma avaliação final automática à IA antes de finalizar
-  const hadEvaluation = missionAccumulatedAura > 0;
+  const hadEvaluation = missionScoreApplied;
   if(!hadEvaluation && chatHistory.length >= 2){
-    await forcarAvaliacaoFinal();
+    await forcarAvaliacaoFinal(); // já aplica pontos, popup e finaliza a missão
   }
-  
-  missionActive = false;
+
+  if(!missionScoreApplied){
+    // realmente não havia nada pra avaliar (sessão muito curta) — fecha sem pontos
+    missionActive = false;
+    removeTyping();
+    const _capEsgotado = getCalvaoRemainingThisWeek(CU) <= 0;
+    addAIMsg(`⏰ **Tempo esgotado!** A sessão de 25 minutos terminou.\n\n${_capEsgotado ? `⚠️ **Você atingiu o limite semanal de ${fmtAura(getWeeklyCalvaoCap())} aura via Calvão.** Fale com o professor ou aguarde o reset!` : 'Você não chegou a responder nada nesta sessão.'}\n\nVolte amanhã para continuar evoluindo!`);
+    CU.missoes = (CU.missoes||0) + 1;
+    if(CU.penaltyBoost) CU.penaltyBoost = false;
+    await finalizeMission(true);
+    return;
+  }
+
+  // v3 — a pontuação já foi aplicada (aura, missões, finalizeMission) dentro de
+  // forcarAvaliacaoFinal/aplicarPontuacaoFinal — aqui só mostra a mensagem final.
   removeTyping();
-  // PATCH 9.13 — mensagem honesta: diferencia "cap semanal atingido" de "pontuação baixa"
-  const _capEsgotado = getCalvaoRemainingThisWeek(CU) <= 0;
-  addAIMsg(`⏰ **Tempo esgotado!** A sessão de 25 minutos terminou.\n\n${missionAccumulatedAura > 0 ? `Você acumulou **${fmtAura(missionAccumulatedAura)}** de aura nesta missão. Bom trabalho!` : (_capEsgotado ? `⚠️ **Você atingiu o limite semanal de ${fmtAura(getWeeklyCalvaoCap())} aura via Calvão.** Seu desempenho contou, mas o teto da semana já foi alcançado — os pontos não puderam ser adicionados. Fale com o professor ou aguarde o reset!` : 'Você não acumulou aura suficiente nesta sessão. Tente focar mais no conteúdo da próxima vez!')}\n\nVolte amanhã para continuar evoluindo!`);
-  CU.missoes = (CU.missoes||0) + 1;
-  if(CU.penaltyBoost) CU.penaltyBoost = false;
-  await finalizeMission(true);
+  addAIMsg(`⏰ **Tempo esgotado!** Você acumulou **${fmtAura(missionAccumulatedAura)}** de aura nesta missão. Bom trabalho!\n\nVolte amanhã para continuar evoluindo!`);
 }
 
 async function endMissionVoluntarily(){
   if(!missionActive) return;
   if(!confirm('Tem certeza que deseja encerrar a missão? O coração será consumido.')) return;
+
+  if(missionScoreApplied){
+    // v3 — já foi avaliado (ex: terminou as 7 perguntas) — só fecha, sem pontuar de novo
+    stopMissionTimer();
+    missionActive = false;
+    removeTyping();
+    addAIMsg(`🏁 **Missão encerrada por você.**\n\nVocê já recebeu **${fmtAura(missionAccumulatedAura)}** de aura nesta sessão.`);
+    await finalizeMission(false);
+    return;
+  }
+
+  // v3 — ainda não foi avaliado (ex: parou na pergunta 3 de 7): avalia o que já foi
+  // respondido até aqui e dá crédito parcial, com o mesmo popup de confirmação.
   stopMissionTimer();
-  missionActive = false;
   removeTyping();
-  addAIMsg(`🏁 **Missão encerrada por você.**\n\n${missionAccumulatedAura > 0 ? `Você acumulou **${fmtAura(missionAccumulatedAura)}** de aura nesta missão.` : 'Você encerrou sem ganhar aura. Tente focar mais no conteúdo da próxima vez!'}\n\nO tempo restante pode ser usado para revisar conteúdo livremente — mas sem ganho de aura.`);
-  await finalizeMission(false);
+  if(chatHistory.length >= 2){
+    await forcarAvaliacaoFinal();
+  } else {
+    missionScoreApplied = true;
+    missionActive = false;
+    addAIMsg('🏁 **Missão encerrada.** Você não chegou a responder nada, então não há pontos pra essa sessão.');
+    await finalizeMission(false);
+  }
 }
 
 async function finalizeMission(byTimer){
@@ -9985,7 +10082,7 @@ function startNewMission(){
     return;
   }
   
-  missionActive=true; missionStep=0; chatHistory=[];
+  missionActive=true; missionStep=0; chatHistory=[]; missionScoreApplied=false;
   missionAccumulatedAura = 0;
   missionTurnEvaluations = [];
   
@@ -10091,9 +10188,12 @@ function renderMissaoBadge(){
 
 function addAIMsg(text){
   const msgs=document.getElementById('chat-msgs'); if(!msgs)return;
+  // v3 — a tag "PONTOS_FINAIS: X.XXX" é só pro sistema ler; o aluno nunca deve vê-la
+  let textoLimpo = (text||'').replace(/\n?[ \t]*pontos?_finais?\s*:?\s*[\d.,]+[ \t]*\n?/gi, '').trim();
+  if(!textoLimpo) textoLimpo = 'Beleza, já registrei sua pontuação! 🎉';
   const d=document.createElement('div');
   d.className='msg-ai';
-  d.innerHTML=`<div class="msg-lbl">Calvão de crIA</div><div class="bubble">${text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}</div>`;
+  d.innerHTML=`<div class="msg-lbl">Calvão de crIA</div><div class="bubble">${textoLimpo.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}</div>`;
   msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight;
   saveChatMsg('CALVÃO',text);
 }
@@ -10403,65 +10503,9 @@ ${text}`;
 
     // ===== PARSE 3: PONTUAÇÃO FINAL (tag nova + fallback) =====
     const scoreParsed3 = parseFinalScore(reply);
-    if(scoreParsed3 !== null){
-      let basePts = scoreParsed3;
-      // Sanity: se vier em formato 4000 ou 400, converte
-      if(basePts >= 100) basePts = basePts/1000;
-      if(basePts >= 10) basePts = basePts/100;
-      if(basePts < 0) basePts = 0;
-
-      let finalPts;
-      let isCappedBySemana = false;
-
-      if(isSQ){
-        // ⭐ SUPER QUEST — valor fixo, sem multiplicador, sem cap semanal do Calvão
-        // Aceita apenas 2,000 / 1,000 / 0,200
-        if(basePts >= 1.5) finalPts = 2.000;
-        else if(basePts >= 0.5) finalPts = 1.000;
-        else finalPts = 0.200;
-      } else {
-        // Missão normal: cap por sessão 2,000
-        if(basePts > SESSION_MAX_AURA) basePts = SESSION_MAX_AURA;
-        // Aplica multiplicador (lógica nova: +200 pts por x, cap 5x)
-        finalPts = applyMultiplier(basePts, xCount, hasPenaltyBoost);
-        // Cap semanal do Calvão (só para missão normal)
-        if(finalPts > calvaoRestante){
-          finalPts = parseFloat(calvaoRestante.toFixed(3));
-          isCappedBySemana = true;
-        }
-      }
-
-      setTimeout(async ()=>{
-        if(finalPts > 0){
-          changeAura(CU, finalPts);
-          // Super Quest NÃO conta no cap semanal do Calvão
-          if(!isSQ){
-            addCalvaoEarned(CU, finalPts);
-          }
-          missionAccumulatedAura = finalPts;
-        }
-        CU.missoes=(CU.missoes||0)+1;
-        // Consome bônus de penalidade APÓS aplicar (só missão normal)
-        if(!isSQ && CU.penaltyBoost){CU.penaltyBoost=false;}
-
-        stopMissionTimer();
-        missionActive = false;
-        await finalizeMission(false);
-
-        let msg = `+${fmtAura(finalPts)} aura!`;
-        if(isSQ){
-          msg += ' ⭐ SUPER QUEST';
-        } else {
-          if(xCount > 0) msg += ` (base ${fmtAura(basePts)} +${xCount}x)`;
-          if(hasPenaltyBoost) msg += ' +10% recuperação';
-          if(isCappedBySemana) msg += ' (cap semanal atingido)';
-        }
-        if(finalPts === 0) msg = isCappedBySemana
-          ? `⚠️ Cap semanal de ${fmtAura(getWeeklyCalvaoCap())} atingido — seu desempenho contou, mas o teto da semana engoliu os pontos. Fale com o professor!`
-          : `Sessão sem ganhos — tente focar mais no conteúdo da próxima vez.`;
-        showNotif(msg);
-      }, 800);
-    } else if(!isSQ && missionActive){
+    if(scoreParsed3 !== null && !missionScoreApplied){
+      setTimeout(()=>{ aplicarPontuacaoFinal(scoreParsed3, {isSQ}); }, 400);
+    } else if(!isSQ && missionActive && !missionScoreApplied){
       // v3 — REDE DE SEGURANÇA: a IA já fez a Pergunta 7 de 7 numa mensagem anterior,
       // mas essa resposta não trouxe a pontuação final (esqueceu/errou o formato).
       // Em vez de deixar o aluno sem receber o que farmou, força a avaliação agora.
