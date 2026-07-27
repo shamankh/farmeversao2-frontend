@@ -12097,6 +12097,7 @@ function siegeArmasDoAluno(){
 function siegeEvtCardHtml(){
   const ev = siegeEvt();
   const ativo = !!ev;
+  const nomeTurma = t => t ? `${t.ano||''} ${t.turma||''}`.trim() : '?';
   let corpo = '';
   if(ativo){
     const tA = (DB.turmas||[]).find(t=>t.id===ev.turmaA), tB = (DB.turmas||[]).find(t=>t.id===ev.turmaB);
@@ -12108,7 +12109,7 @@ function siegeEvtCardHtml(){
       : falta > -15*60000 ? '⚔️ HORA DA BATALHA!' : '🏁 Janela encerrada';
     corpo = `
       <div style="font-size:13px;line-height:1.5">
-        <b style="color:var(--purple2)">${tA?tA.nome:'?'}</b> 🆚 <b style="color:var(--gold)">${tB?tB.nome:'?'}</b><br>
+        <b style="color:var(--purple2)">${nomeTurma(tA)}</b> 🆚 <b style="color:var(--gold)">${nomeTurma(tB)}</b><br>
         📅 ${quando} · ⏱️ 15 min · 🚩 vence quem capturar mais bandeiras<br>
         <span style="color:var(--green)">${status}</span>
       </div>
@@ -12118,7 +12119,7 @@ function siegeEvtCardHtml(){
         <button class="btn" style="color:var(--red)" onclick="encerrarSiegeEvt()">✕ Encerrar evento</button>
       </div>`;
   } else {
-    const ops = (DB.turmas||[]).map(t=>`<option value="${t.id}">${t.nome}</option>`).join('');
+    const ops = (DB.turmas||[]).map(t=>`<option value="${t.id}">${nomeTurma(t)}</option>`).join('');
     corpo = `
       <div style="font-size:12.5px;color:var(--muted2)">Agende a batalha: 30 min antes os alunos das duas turmas compram armas (6.700 pontos cada, máx. 2) e montam a estratégia de papéis. Batalha de 15 min — vence quem capturar mais bandeiras.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -12600,7 +12601,7 @@ function gravarPonteSiege(){
       v:1, ts:Date.now(),
       nome: (CU.char&&CU.char.apelido)||CU.nome.split(' ')[0],
       nomeCompleto: CU.nome,
-      turma: t?t.nome:'',
+      turma: t?`${t.ano||''} ${t.turma||''}`.trim():'',
       aura: Math.round((CU.aura||0)*1000),
       emoji: CU.char&&CU.char.emoji||'🧑',
       char: (CU.char&&CU.char.c3d)||null,
@@ -12630,7 +12631,7 @@ function gravarPonteWar(){
       v:1, ts:Date.now(),
       nome: (CU.char&&CU.char.apelido)||CU.nome.split(' ')[0],
       nomeCompleto: CU.nome,
-      turma: t?t.nome:'',
+      turma: t?`${t.ano||''} ${t.turma||''}`.trim():'',
       aura: Math.round((CU.aura||0)*1000),
       emoji: CU.char&&CU.char.emoji||'🧑',
       war: (warState && warState.nome===CU.nome) ? warState : null
