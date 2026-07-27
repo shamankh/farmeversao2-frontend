@@ -8084,6 +8084,16 @@ async function montarMascoteFlutuante(){
     <button id="calvao-mudo-btn" onclick="toggleMudoCalvao()" title="Ligar/desligar voz" style="background:rgba(13,10,31,.8);border:2px solid #0d0a1f;border-radius:50%;width:26px;height:26px;font-size:12px;cursor:pointer;padding:0;color:#fff">🔊</button>`;
   document.body.appendChild(wrap);
 
+  // v3 — botão de trocar a voz (cada navegador tem vozes diferentes; deixa o
+  // aluno escolher a que mais agrada, do lado do botão de mudo)
+  const btnVoz = document.createElement('button');
+  btnVoz.id = 'calvao-voz-btn';
+  btnVoz.title = 'Trocar a voz do Calvão';
+  btnVoz.onclick = abrirSeletorVoz;
+  btnVoz.style.cssText = 'background:rgba(13,10,31,.8);border:2px solid #0d0a1f;border-radius:50%;width:26px;height:26px;font-size:12px;cursor:pointer;padding:0;color:#fff;margin-top:4px';
+  btnVoz.textContent = '🎚️';
+  wrap.appendChild(btnVoz);
+
   if(!document.getElementById('mascote-keyframes')){
     const st = document.createElement('style');
     st.id = 'mascote-keyframes';
@@ -8160,6 +8170,65 @@ function fecharBalaoCalvao(){
   if(window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
+// v3 — seletor manual de voz: cada navegador tem vozes diferentes, e o que
+// soa bem pra um aluno pode não agradar outro. Deixa escolher e testar.
+let _vozManualNome = localStorage.getItem('calvao_voz_manual') || null;
+
+function abrirSeletorVoz(){
+  const existente = document.getElementById('calvao-voz-popover');
+  if(existente){ existente.remove(); return; }
+  if(!window.speechSynthesis) { showNotif('⚠️ Seu navegador não tem vozes disponíveis.'); return; }
+
+  const vozes = window.speechSynthesis.getVoices().filter(v => /^pt/i.test(v.lang));
+  if(!vozes.length){ showNotif('⚠️ Nenhuma voz em português encontrada no seu navegador.'); return; }
+
+  const pop = document.createElement('div');
+  pop.id = 'calvao-voz-popover';
+  pop.style.cssText = 'position:fixed;top:150px;right:12px;z-index:8600;background:#1a1533;border:3px solid #0d0a1f;border-radius:14px;padding:10px;width:230px;max-height:280px;overflow-y:auto;box-shadow:4px 4px 0 #0d0a1f;font-family:\'Fredoka\',sans-serif';
+  pop.innerHTML = `<div style="font-size:12px;font-weight:700;color:#ffd93d;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      🎚️ Escolher voz
+      <span onclick="document.getElementById('calvao-voz-popover').remove()" style="cursor:pointer;color:#fff;font-size:16px">✕</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div onclick="escolherVozCalvao(null)" style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;cursor:pointer;background:${!_vozManualNome?'#8b5cf6':'transparent'};color:#fff;font-size:11px">
+        <span>✨</span><span style="flex:1">Automática (recomendada)</span>
+      </div>
+      ${vozes.map(v => `
+        <div style="display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:8px;background:${_vozManualNome===v.name?'#8b5cf6':'transparent'}">
+          <div onclick="escolherVozCalvao('${v.name.replace(/'/g,"\\'")}')" style="flex:1;cursor:pointer;font-size:11px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name.replace(/^(Microsoft|Google)\s*/i,'')}</div>
+          <button onclick="testarVoz('${v.name.replace(/'/g,"\\'")}')" title="Ouvir teste" style="background:#ffd93d;border:none;border-radius:6px;width:22px;height:22px;font-size:10px;cursor:pointer;flex-shrink:0">▶️</button>
+        </div>`).join('')}
+    </div>`;
+  document.body.appendChild(pop);
+}
+
+function escolherVozCalvao(nomeVoz){
+  _vozManualNome = nomeVoz;
+  if(nomeVoz) localStorage.setItem('calvao_voz_manual', nomeVoz);
+  else localStorage.removeItem('calvao_voz_manual');
+  const pop = document.getElementById('calvao-voz-popover');
+  if(pop) pop.remove();
+  showNotif(nomeVoz ? '🎚️ Voz alterada!' : '✨ Voltou pra escolha automática');
+  testarVoz(nomeVoz, true);
+}
+
+function testarVoz(nomeVoz, curta){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(curta ? 'Oi! Essa sou eu, o Calvão!' : 'Oi, oi! Bora farmar aura hoje?');
+  u.lang = 'pt-BR';
+  if(nomeVoz){
+    const v = window.speechSynthesis.getVoices().find(x => x.name === nomeVoz);
+    if(v) u.voice = v;
+    u.pitch = 1; u.rate = 0.98; // voz escolhida manualmente: sem forçar timbre
+  } else {
+    if(!_vozPtBr) _vozPtBr = escolherMelhorVozPt();
+    if(_vozPtBr) u.voice = _vozPtBr;
+    u.rate = 0.98; u.pitch = _vozEhMascReal ? 0.95 : 0.6;
+  }
+  window.speechSynthesis.speak(u);
+}
+
 // PATCH 9.5 — Narração por voz (Web Speech API, melhor voz PT-BR)
 let _vozPtBr = null;
 let _vozEhMascReal = false; // true se a voz já é masculina nativa (não precisa pitch grave)
@@ -8207,11 +8276,18 @@ function falarCalvao(forcar){
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(_calvaoMsgAtual.replace(/[🤖🌍🔥✨🎯💜⭐❤️😎🚀]/g,''));
   u.lang = 'pt-BR';
-  if(!_vozPtBr) _vozPtBr = escolherMelhorVozPt();
-  if(_vozPtBr) u.voice = _vozPtBr;
-  // Se a voz já é masculina real, pitch quase normal; se é feminina/neutra, força grave
-  u.rate = 0.98;
-  u.pitch = _vozEhMascReal ? 0.95 : 0.6; // 0.6 deixa a voz feminina do Chrome bem mais grave/masculina
+  // v3 — prioriza a voz escolhida manualmente pelo aluno, se houver
+  const vozManual = _vozManualNome ? window.speechSynthesis.getVoices().find(v => v.name === _vozManualNome) : null;
+  if(vozManual){
+    u.voice = vozManual;
+    u.rate = 0.98; u.pitch = 1; // escolha deliberada: não força timbre
+  } else {
+    if(!_vozPtBr) _vozPtBr = escolherMelhorVozPt();
+    if(_vozPtBr) u.voice = _vozPtBr;
+    // Se a voz já é masculina real, pitch quase normal; se é feminina/neutra, força grave
+    u.rate = 0.98;
+    u.pitch = _vozEhMascReal ? 0.95 : 0.6; // 0.6 deixa a voz feminina do Chrome bem mais grave/masculina
+  }
   window.speechSynthesis.speak(u);
 }
 
