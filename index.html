@@ -1253,6 +1253,13 @@ input, textarea, select{ font-size:14px; }
         <option value="50" selected>50 minutos</option>
         <option value="60">60 minutos</option>
       </select></div>
+    <div class="modal-row"><div class="modal-lbl">Disciplina desta turma</div>
+      <select class="modal-in" id="nt-disciplina"></select>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input class="modal-in" id="nt-disc-nova" placeholder="Ou digite uma disciplina nova" style="flex:1">
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:5px">💡 Cada turma tem uma disciplina. Se você dá duas matérias para a mesma sala, crie uma turma para cada — o conteúdo do bimestre fica separado.</div>
+    </div>
     <div class="modal-ft">
       <button class="btn" onclick="closeM('m-turma')">Cancelar</button>
       <button class="btn btn-p" onclick="criarTurma()">Criar Turma</button>
@@ -3429,26 +3436,17 @@ async function setCellTurma(key, val){
 function renderSB(){
   const el=document.getElementById('sb-list'); if(!el)return;
   const turmas=getProfTurmas();
-  // v4 — cada turma aparece UMA VEZ POR DISCIPLINA (mesmos alunos, conteúdos separados)
-  const linhas = [];
-  turmas.forEach(t=>{
-    const discs = PROF_VINCULOS.filter(v=>v.turma_id===t.id)
-      .map(v=>PROF_DISCIPLINAS.find(d=>d.id===v.disciplina_id)).filter(Boolean);
-    if(!discs.length){ linhas.push({t, d:null}); }
-    else discs.forEach(d=>linhas.push({t, d}));
-  });
-  el.innerHTML = linhas.map(({t,d})=>{
-    const ativo = (t.id===CTid) && (!d || d.id===CDid || !CDid);
-    const tagDisc = d
-      ? `<span style="font-size:9px;font-weight:700;color:${d.cor||'var(--purple2)'};background:${(d.cor||'#8b5cf6')}22;padding:1px 5px;border-radius:5px;margin-left:4px">${d.abrev||d.nome.slice(0,4)}</span>` : '';
-    const go = `selTurma('${t.id}'${d?`,'${d.id}'`:''})`;
+  // v4 — UMA linha por turma. A disciplina é escolhida ao criar a turma.
+  el.innerHTML = turmas.map(t=>{
+    const d = discDaTurma(t.id);
+    const tag = d ? `<span style="font-size:9px;font-weight:700;color:${d.cor||'var(--purple2)'};background:${(d.cor||'#8b5cf6')}22;padding:1px 5px;border-radius:5px;margin-left:4px">${d.abrev||d.nome.slice(0,4)}</span>` : '';
     return `
-    <div class="t-tab ${ativo?'active':''}" style="padding-right:4px">
-      <div class="tdot" onclick="${go}" style="cursor:pointer;${d?`background:${d.cor||'#8b5cf6'}`:''}"></div>
-      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="${go}">${t.ano}${tagDisc}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
+    <div class="t-tab ${t.id===CTid?'active':''}" style="padding-right:4px">
+      <div class="tdot" onclick="selTurma('${t.id}')" style="cursor:pointer;${d?`background:${d.cor||'#8b5cf6'}`:''}"></div>
+      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="selTurma('${t.id}')">${t.ano}${tag}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
       <span class="t-cnt">${t.alunos.length}</span>
-      <button onclick="event.stopPropagation();openEditarTurma('${t.id}')" title="Editar turma e disciplinas" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
-      <button onclick="event.stopPropagation();deletarTurma('${t.id}')" title="Deletar turma" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+      <button onclick="event.stopPropagation();openEditarTurma('${t.id}')" title="Editar turma" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
+      <button onclick="event.stopPropagation();deletarTurma('${t.id}')" title="APAGAR A TURMA INTEIRA (e todos os alunos dela)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">🗑</button>
     </div>`;}).join('')||'<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Nenhuma turma</div>';
   const btn=document.getElementById('btn-nt');
   if(btn)btn.disabled=turmas.length>=15;
@@ -3688,6 +3686,10 @@ async function sairDaEscola(){
 // v4 — estado das disciplinas do professor (carregado do servidor)
 let PROF_DISCIPLINAS = [], PROF_VINCULOS = [], PROF_ESCOLA = null;
 
+function discDaTurma(turmaId){
+  const v = PROF_VINCULOS.find(x=>x.turma_id===turmaId);
+  return v ? PROF_DISCIPLINAS.find(d=>d.id===v.disciplina_id) : null;
+}
 function discAbrevsDaTurma(turmaId){
   return PROF_VINCULOS.filter(v=>v.turma_id===turmaId).map(v=>{
     const d = PROF_DISCIPLINAS.find(x=>x.id===v.disciplina_id);
@@ -3718,8 +3720,12 @@ function deletarTurma(id){
   const t=turmas.find(x=>x.id===id);
   if(!t)return;
   deletarTurmaId=id;
-  document.getElementById('del-turma-sub').textContent=
-    t.ano+' — '+t.turma+' · '+t.alunos.length+' aluno(s)';
+  const d = discDaTurma(id);
+  document.getElementById('del-turma-sub').innerHTML =
+    '<b style="color:var(--red2);font-size:14px">'+t.ano+' — '+t.turma+
+    (d?' ('+d.nome+')':'')+'</b><br>Isso apaga a TURMA INTEIRA e os <b>'+
+    t.alunos.length+' aluno(s)</b> dela.<br>' +
+    '<span style="color:var(--muted)">Para apagar só a disciplina, use o ✏️ e o ✕ ao lado dela.</span>';
   document.getElementById('del-turma-confirm').value='';
   document.getElementById('del-turma-err').style.display='none';
   openM('m-del-turma');
@@ -7985,6 +7991,22 @@ async function criarTurma(){
       aulaS:{pos:[],neg:[]}, notas:[], alunos:[]
     };
     DB.turmas.push(novaT);
+    // v4 — vincula a disciplina escolhida (ou cria uma nova na hora)
+    try{
+      const nomeNova = (document.getElementById('nt-disc-nova')||{}).value;
+      let discId = (document.getElementById('nt-disciplina')||{}).value || null;
+      if(nomeNova && nomeNova.trim()){
+        const rd = await apiFetch('/api/db?action=disciplina', {nome:nomeNova.trim()});
+        if(rd.disciplina){ PROF_DISCIPLINAS.push(rd.disciplina); discId = rd.disciplina.id; }
+      }
+      if(discId){
+        await apiFetch('/api/db?action=turma-disciplina', {turmaId:novaT.id, disciplinaId:discId, aulasSemanais});
+        PROF_VINCULOS.push({turma_id:novaT.id, disciplina_id:discId});
+        CDid = discId;
+        const d = PROF_DISCIPLINAS.find(x=>x.id===discId);
+        if(d){ DB.bimDates = d.bim_dates||{}; DB.seriesPDF = d.series_pdf||{}; }
+      }
+    }catch(e){ console.warn('vincular disciplina:', e); }
     closeM('m-turma');
     CTid=novaT.id;CTtab='alunos';
     renderProfApp();renderSB();renderTurmaView();
@@ -13102,7 +13124,17 @@ function resetWeekStart(){
 // ==============================
 // UTILS
 // ==============================
-function openM(id){ document.getElementById(id).classList.add('show'); }
+function openM(id){
+  if(id==='m-turma') preencherSelectDisciplinas();
+  document.getElementById(id).classList.add('show');
+}
+function preencherSelectDisciplinas(){
+  const sel = document.getElementById('nt-disciplina');
+  if(!sel) return;
+  sel.innerHTML = (PROF_DISCIPLINAS.length
+    ? PROF_DISCIPLINAS.map(d=>`<option value="${d.id}">${d.nome}</option>`).join('')
+    : '') + '<option value="">— nenhuma —</option>';
+}
 function closeM(id){ document.getElementById(id).classList.remove('show'); }
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('show');}));
 
