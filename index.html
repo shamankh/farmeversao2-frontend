@@ -1201,6 +1201,11 @@ input, textarea, select{ font-size:14px; }
   <div class="bw" id="bw"></div>
 </div>
 
+<!-- MODAL IMPORTAR TURMA (v4) -->
+<div class="modal-bg" id="m-importar-turma">
+  <div class="modal" id="m-importar-turma-body" style="max-width:460px"></div>
+</div>
+
 <!-- MODAL EDITAR TURMA (v4) -->
 <div class="modal-bg" id="m-editar-turma">
   <div class="modal" id="m-editar-turma-body"></div>
@@ -2924,6 +2929,7 @@ function renderProfApp(){
       <div class="sb-list" id="sb-list"></div>
       <div class="sb-ft" style="display:flex;flex-direction:column;gap:6px">
         <button class="btn-new" id="btn-nt" onclick="openM('m-turma');toggleProfSidebarMobile(false)">+ NOVA TURMA</button>
+        <button class="btn-new" style="border-color:rgba(63,184,158,.35);color:#3fb89e" onclick="openImportarTurma();toggleProfSidebarMobile(false)">🔗 IMPORTAR POR CÓDIGO</button>
         ${isMaster?`<button class="btn-new" style="border-color:rgba(240,180,41,.25);color:var(--gold)" onclick="openSuperAdmin();toggleProfSidebarMobile(false)">👁 SUPER ADMIN</button>`:''}
       </div>
     </div>
@@ -3443,10 +3449,14 @@ function renderSB(){
     return `
     <div class="t-tab ${t.id===CTid?'active':''}" style="padding-right:4px">
       <div class="tdot" onclick="selTurma('${t.id}')" style="cursor:pointer;${d?`background:${d.cor||'#8b5cf6'}`:''}"></div>
-      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="selTurma('${t.id}')">${t.ano}${tag}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
+      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="selTurma('${t.id}')">${t.ano}${tag}${t.importada?'<span title="Turma compartilhada de outro professor" style="font-size:9px;margin-left:3px">🔗</span>':''}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
       <span class="t-cnt">${t.alunos.length}</span>
+      <div style="display:flex;flex-direction:column;gap:0;margin-right:1px">
+        <span onclick="event.stopPropagation();moverTurma('${t.id}',-1)" title="Subir" style="cursor:pointer;font-size:8px;line-height:8px;color:var(--muted)" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">▲</span>
+        <span onclick="event.stopPropagation();moverTurma('${t.id}',1)" title="Descer" style="cursor:pointer;font-size:8px;line-height:8px;color:var(--muted)" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">▼</span>
+      </div>
       <button onclick="event.stopPropagation();openEditarTurma('${t.id}')" title="Editar turma" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
-      <button onclick="event.stopPropagation();deletarTurma('${t.id}')" title="APAGAR A TURMA INTEIRA (e todos os alunos dela)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">🗑</button>
+      <button onclick="event.stopPropagation();${t.importada?`removerMinhaDisciplina('${t.id}')`:`deletarTurma('${t.id}')`}" title="${t.importada?'Sair desta turma (não apaga nada de ninguém)':'APAGAR A TURMA INTEIRA (e todos os alunos dela)'}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">${t.importada?'⏏':'🗑'}</button>
     </div>`;}).join('')||'<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Nenhuma turma</div>';
   const btn=document.getElementById('btn-nt');
   if(btn)btn.disabled=turmas.length>=15;
@@ -3457,6 +3467,104 @@ function renderSB(){
 // ══════════════════════════════════════════════════════════════════
 // EDITAR TURMA + DISCIPLINA (v4)
 // ══════════════════════════════════════════════════════════════════
+// v4 — reordenar turmas na barra lateral
+async function moverTurma(id, delta){
+  const lista = getProfTurmas();
+  const i = lista.findIndex(t=>t.id===id);
+  if(i<0) return;
+  const j = i + delta;
+  if(j<0 || j>=lista.length) return;
+  const a = lista[i], b = lista[j];
+  const ia = DB.turmas.indexOf(a), ib = DB.turmas.indexOf(b);
+  DB.turmas[ia] = b; DB.turmas[ib] = a;
+  renderSB();
+  try{ await apiFetch('/api/db?action=turma-reordenar', {ordem: getProfTurmas().map(t=>t.id)}); }
+  catch(e){ console.warn('reordenar:', e); }
+}
+
+// v4 — sair de uma turma importada (remove só a MINHA disciplina dela)
+async function removerMinhaDisciplina(turmaId){
+  const d = discDaTurma(turmaId);
+  if(!d){ showNotif('Nenhuma disciplina sua nesta turma.'); return; }
+  if(!confirm(`Sair desta turma compartilhada?\n\nSerá removida apenas a SUA disciplina "${d.nome}".\nOs alunos e a turma continuam intactos para os outros professores.`)) return;
+  try{
+    await apiFetch('/api/db?action=turma-disciplina', {turmaId, disciplinaId:d.id, op:'remove'});
+    PROF_VINCULOS = PROF_VINCULOS.filter(v=>!(v.turma_id===turmaId && v.disciplina_id===d.id));
+    DB.turmas = DB.turmas.filter(t=>t.id!==turmaId);
+    if(CTid===turmaId) CTid=null;
+    renderSB(); showProfHome();
+    showNotif('⏏ Você saiu da turma compartilhada.');
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+function copiarCodigoTurma(cod){
+  navigator.clipboard?.writeText(cod).then(
+    ()=>showNotif('📋 Código copiado! Envie para o outro professor.'),
+    ()=>showNotif('Código: '+cod)
+  );
+}
+
+// v4 — importar turma de outro professor pelo código
+let _turmaImportPreview = null;
+async function buscarTurmaPorCodigo(){
+  const cod = (document.getElementById('imp-codigo').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const box = document.getElementById('imp-resultado');
+  if(cod.length!==10){ box.innerHTML='<div style="font-size:11px;color:var(--red2)">O código tem 10 caracteres.</div>'; return; }
+  box.innerHTML='<div style="font-size:12px;color:var(--muted)">Procurando...</div>';
+  try{
+    const r = await apiFetch('/api/db?action=turma-buscar-codigo', {codigo:cod});
+    _turmaImportPreview = r.turma;
+    box.innerHTML = `<div style="background:var(--bg3);border:1px solid var(--green2);border-radius:8px;padding:10px 12px;font-size:12px">
+      <b style="color:var(--green2)">${r.turma.ano} — ${r.turma.turma}</b><br>
+      <span style="color:var(--muted)">${r.turma.periodo} · ${r.turma.alunos} aluno(s) · criada por ${r.turma.dono}</span><br>
+      <span style="font-size:10.5px;color:var(--muted2)">Os alunos NÃO são copiados — eles mantêm o mesmo login e ganham a sua disciplina.</span>
+    </div>`;
+  }catch(e){ _turmaImportPreview=null; box.innerHTML='<div style="font-size:11px;color:var(--red2)">'+e.message+'</div>'; }
+}
+
+async function confirmarImportarTurma(){
+  if(!_turmaImportPreview){ showNotif('Busque o código primeiro.'); return; }
+  const cod = (document.getElementById('imp-codigo').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const discId = (document.getElementById('imp-disciplina')||{}).value || '';
+  const nova = (document.getElementById('imp-disc-nova')||{}).value || '';
+  if(!discId && !nova.trim()){ showNotif('Escolha ou informe a disciplina que você dá nesta turma.'); return; }
+  try{
+    await apiFetch('/api/db?action=turma-importar', {codigo:cod, disciplinaId:discId||null, disciplinaNova:nova.trim()||null});
+    showNotif('🔗 Turma importada! Recarregando...');
+    closeM('m-importar-turma');
+    const fresh = await apiFetch('/api/db?action=load', null, 'GET');
+    loadProfData(fresh);
+    await carregarDisciplinas();
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+function openImportarTurma(){
+  const opts = (PROF_DISCIPLINAS.length
+    ? PROF_DISCIPLINAS.map(d=>`<option value="${d.id}">${d.nome}</option>`).join('')
+    : '') + '<option value="">— escolher/criar abaixo —</option>';
+  document.getElementById('m-importar-turma-body').innerHTML = `
+    <div class="modal-t">🔗 Importar turma por código</div>
+    <div class="modal-s">Use o código de uma turma que já existe (sua ou de um colega da escola). Os alunos continuam com o mesmo login — eles só ganham a sua disciplina.</div>
+    <div class="modal-row" style="margin-top:14px">
+      <div class="modal-lbl">Código da turma (10 caracteres)</div>
+      <div style="display:flex;gap:6px">
+        <input class="modal-in" id="imp-codigo" placeholder="Ex: A3F9B2C17D" maxlength="12" style="flex:1;font-family:'Orbitron',monospace;letter-spacing:2px;text-transform:uppercase" onkeydown="if(event.key==='Enter')buscarTurmaPorCodigo()">
+        <button class="btn btn-sm" onclick="buscarTurmaPorCodigo()">🔎 Buscar</button>
+      </div>
+    </div>
+    <div id="imp-resultado" style="margin:8px 0 12px"></div>
+    <div class="modal-row">
+      <div class="modal-lbl">Sua disciplina nesta turma</div>
+      <select class="modal-in" id="imp-disciplina">${opts}</select>
+      <input class="modal-in" id="imp-disc-nova" placeholder="Ou digite uma disciplina nova" style="margin-top:6px">
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeM('m-importar-turma')">Cancelar</button>
+      <button class="btn btn-p" onclick="confirmarImportarTurma()">🔗 Importar</button>
+    </div>`;
+  openM('m-importar-turma');
+}
+
 function openEditarTurma(id){
   const t = getProfTurmas().find(x=>x.id===id);
   if(!t) return;
@@ -3477,6 +3585,14 @@ function openEditarTurma(id){
       <div class="fi"><div class="fl">Período</div><input class="fin" id="et-periodo" value="${t.periodo||''}"></div>
       <div class="fi"><div class="fl">Aulas por semana</div><input class="fin" id="et-aulas" type="number" min="1" max="10" value="${t.aulasSemanais||2}"></div>
     </div>
+    ${t.codigo?`<div style="margin-top:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:10px 12px">
+      <div class="fl" style="margin-bottom:4px">Código desta turma (para compartilhar)</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-family:'Orbitron',monospace;font-size:16px;font-weight:900;letter-spacing:3px;color:var(--gold)">${t.codigo}</span>
+        <button class="btn btn-sm" onclick="copiarCodigoTurma('${t.codigo}')">📋 Copiar</button>
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:5px">Outro professor usa este código para dar a disciplina dele para os MESMOS alunos.</div>
+    </div>`:''}
     <div style="margin-top:14px">
       <div class="fl" style="margin-bottom:7px">Minhas disciplinas nesta turma</div>
       <div style="display:flex;flex-wrap:wrap;gap:7px">${chips || '<span style="font-size:12px;color:var(--muted)">Nenhuma disciplina cadastrada ainda.</span>'}</div>
