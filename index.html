@@ -1987,7 +1987,13 @@ function parseFinalScore(reply){
 }
 const WEEKLY_CALVAO_CAP = 12.000;     // Cap semanal via Calvão (em aura)
 // PATCH 9.4 — Atividades gamificadas (GitHub)
-const WEEKLY_ATIVIDADE_PTS_CAP = 3000;  // Máx 3.000 pontos de atividade por semana
+const WEEKLY_ATIVIDADE_PTS_CAP = 3000;  // Padrão: 3.000 pontos de atividade por semana
+// v4 — cap de Atividades Gamificadas configurável pelo professor (mesmo padrão do Calvão)
+function getWeeklyAtividadeCap(){
+  const v = (typeof currentProf !== 'undefined' && currentProf && currentProf.calvaoPacote)
+    ? currentProf.calvaoPacote.capSemanalAtividade : null;
+  return (typeof v === 'number' && v >= 100 && v <= 100000) ? v : WEEKLY_ATIVIDADE_PTS_CAP;
+}
 const ATIVIDADE_PTS_TO_AURA = 0.001;    // 1 ponto = 0,001 aura · teto 3.000 pts = 3,000 aura/semana
 // PATCH 9.5 — Repositório de figurinhas do Calvão (GitHub Pages)
 const CALVAO_FIGURINHAS_MANIFEST = 'https://shamankh.github.io/avataresdocalv-o/manifest.json';
@@ -4737,6 +4743,30 @@ async function restaurarCapPadrao(){
   openEventos();
 }
 
+// v4 — cap semanal das Atividades Gamificadas
+async function aplicarCapAtividade(){
+  const inp = document.getElementById('cap-ativ-input');
+  if(!inp) return;
+  const v = parseInt(String(inp.value).replace(/\D/g,''), 10);
+  if(!v || v < 100 || v > 100000){
+    showNotif('Valor inválido. Use entre 100 e 100.000 pontos.');
+    return;
+  }
+  const c = cp();
+  const anterior = getWeeklyAtividadeCap();
+  c.capSemanalAtividade = v;
+  await salvarEventos();
+  showNotif(`✅ Cap de atividades: ${anterior} → ${v} pts (${fmtAura(v*ATIVIDADE_PTS_TO_AURA)} aura/semana).`);
+  openEventos();
+}
+async function restaurarCapAtividadePadrao(){
+  const c = cp();
+  delete c.capSemanalAtividade;
+  await salvarEventos();
+  showNotif(`✅ Cap de atividades restaurado ao padrão (${WEEKLY_ATIVIDADE_PTS_CAP} pts).`);
+  openEventos();
+}
+
 // FARME WAR — multiplicador de velocidade
 async function aplicarWarMult(){
   const inp = document.getElementById('war-mult-input');
@@ -5669,6 +5699,37 @@ function renderEventosContent(){
           ${!ehPadrao?`<button class="btn btn-sm" onclick="restaurarCapPadrao()" style="border-color:rgba(240,180,41,.4);color:var(--gold)">↩️ Padrão (${fmtAura(WEEKLY_CALVAO_CAP)})</button>`:''}
         </div>
         <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 O novo valor chega ao aluno no próximo login ou ao abrir a aba 🌍 Global. Quem está no meio de uma missão usa o valor antigo até atualizar.</div>
+      </div>`;
+    })()}
+
+    <!-- CONTROLE DO CAP SEMANAL DE ATIVIDADES GAMIFICADAS (v4) -->
+    ${(()=>{
+      const capAtiv = getWeeklyAtividadeCap();
+      const ehPadraoA = !(cp().capSemanalAtividade >= 100);
+      const semanaAtual = (typeof farmeSemanaAtual==='function') ? farmeSemanaAtual().split('_')[0] : '';
+      const noTetoA = (DB.turmas||[]).reduce((s,t)=> s + (t.alunos||[]).filter(a=>{
+        const ap = a.atividadesPontos || {};
+        return (ap.semana === semanaAtual) && ((ap.pontos||0) >= capAtiv);
+      }).length, 0);
+      return `<div class="card" style="margin-bottom:18px;border-color:rgba(74,222,128,.4)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:22px">🎮</span>
+          <strong style="font-size:15px;flex:1">Cap semanal das Atividades Gamificadas</strong>
+          <span class="pill" style="background:rgba(74,222,128,.12);color:var(--green2);font-weight:800">${capAtiv} pts${ehPadraoA?' (padrão)':''}</span>
+          ${noTetoA>0?`<span class="pill" style="background:rgba(252,129,129,.12);color:var(--red2);font-weight:800">${noTetoA} aluno(s) no teto</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:12px">
+          Limite de pontos que cada aluno pode ganhar por semana jogando as <strong>Atividades Gamificadas</strong> (aba 🎮). Cada ponto vale <strong>0,001 aura</strong> — ou seja, ${capAtiv} pts = <strong>${fmtAura(capAtiv*ATIVIDADE_PTS_TO_AURA)} aura</strong> por semana.
+          ${noTetoA>0?`<strong style="color:var(--red2)"> Atenção: ${noTetoA} aluno(s) já bateram o teto — ao aumentar, eles voltam a pontuar imediatamente.</strong>`:''}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="cap-ativ-input" type="number" min="100" max="100000" step="500" value="${capAtiv}"
+            style="width:130px;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:14px;font-family:'Orbitron',monospace;font-weight:700"/>
+          <span style="font-size:11px;color:var(--muted)">pontos/semana</span>
+          <button class="btn btn-sm" onclick="aplicarCapAtividade()" style="border-color:rgba(74,222,128,.5);color:var(--green2);font-weight:700">✅ Aplicar para todos</button>
+          ${!ehPadraoA?`<button class="btn btn-sm" onclick="restaurarCapAtividadePadrao()" style="border-color:rgba(240,180,41,.4);color:var(--gold)">↩️ Padrão (${WEEKLY_ATIVIDADE_PTS_CAP})</button>`:''}
+        </div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 Vale para o aluno no próximo login ou ao abrir a aba 🎮 Atividades.</div>
       </div>`;
     })()}
 
@@ -9407,8 +9468,8 @@ function getAtividadesDisponiveis(){
 
 function renderAtividadesContent(){
   const ap = getAtividadePontos();
-  const restante = Math.max(0, WEEKLY_ATIVIDADE_PTS_CAP - ap.pontos);
-  const pctSemana = Math.round((ap.pontos / WEEKLY_ATIVIDADE_PTS_CAP) * 100);
+  const restante = Math.max(0, getWeeklyAtividadeCap() - ap.pontos);
+  const pctSemana = Math.round((ap.pontos / getWeeklyAtividadeCap()) * 100);
   const atividades = getAtividadesDisponiveis();
 
   let cards = '';
@@ -9451,7 +9512,7 @@ function renderAtividadesContent(){
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:18px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="font-size:12px;color:var(--muted2);font-weight:700">Pontos desta semana</div>
-          <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;color:${pctSemana>=100?'var(--red2)':'var(--gold)'}">${ap.pontos} / ${WEEKLY_ATIVIDADE_PTS_CAP}</div>
+          <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;color:${pctSemana>=100?'var(--red2)':'var(--gold)'}">${ap.pontos} / ${getWeeklyAtividadeCap()}</div>
         </div>
         <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${Math.min(100,pctSemana)}%;background:linear-gradient(90deg,var(--purple),var(--gold));transition:width .3s"></div>
@@ -9469,7 +9530,7 @@ function abrirAtividade(id){
   const atividade = getAtividadesDisponiveis().find(a => a.id === id);
   if(!atividade){ showNotif('Atividade não encontrada'); return; }
   const ap = getAtividadePontos();
-  if(ap.pontos >= WEEKLY_ATIVIDADE_PTS_CAP){
+  if(ap.pontos >= getWeeklyAtividadeCap()){
     showNotif('🔒 Você atingiu o limite de pontos desta semana.');
     return;
   }
@@ -9535,7 +9596,7 @@ function fecharAtividade(){
       if(delta <= 0) return;
 
       const ap = getAtividadePontos();
-      const espacoRestante = WEEKLY_ATIVIDADE_PTS_CAP - ap.pontos;
+      const espacoRestante = getWeeklyAtividadeCap() - ap.pontos;
       if(espacoRestante <= 0){
         showNotif('🔒 Limite semanal de pontos atingido.');
         return;
