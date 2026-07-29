@@ -2325,6 +2325,13 @@ async function saveDB(){
         bim_dates: DB.bimDates||{},
         series_pdf: DB.seriesPDF||{}
       });
+      // v4 — se há disciplina ativa, o conteúdo pertence a ELA (não ao professor)
+      if(CDid){
+        try{ await apiFetch('/api/db?action=disciplina-conteudo',
+          { id: CDid, bimDates: DB.bimDates||{}, seriesPDF: DB.seriesPDF||{} }); }catch(e){}
+        const d = PROF_DISCIPLINAS.find(x=>x.id===CDid);
+        if(d){ d.bim_dates = DB.bimDates||{}; d.series_pdf = DB.seriesPDF||{}; }
+      }
     } catch(e){ console.warn('saveDB profile error:', e); }
   }
 }
@@ -3460,7 +3467,7 @@ function openEditarTurma(id){
     const on = vinculadas.includes(d.id);
     return `<div style="display:inline-flex;align-items:center;gap:4px;padding:5px 7px 5px 11px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid ${on?d.cor||'var(--purple2)':'var(--border2)'};background:${on?(d.cor||'#8b5cf6')+'22':'transparent'};color:${on?'var(--text)':'var(--muted)'}">
       <span onclick="toggleDiscTurma('${id}','${d.id}',${on})" style="cursor:pointer">${on?'✓':'+'} ${d.nome}</span>
-      <span onclick="event.stopPropagation();deletarDisciplina('${d.id}','${d.nome.replace(/'/g,"\\'")}','${id}')" title="Apagar disciplina" style="cursor:pointer;color:var(--muted);font-size:11px;padding:0 2px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">🗑</span>
+      <span onclick="event.stopPropagation();deletarDisciplina('${d.id}','${d.nome.replace(/'/g,"\\'")}','${id}')" title="Apagar disciplina" style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:900;padding:0 3px;line-height:1" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">✕</span>
     </div>`;
   }).join('');
   document.getElementById('m-editar-turma-body').innerHTML = `
@@ -3517,13 +3524,15 @@ async function toggleDiscTurma(turmaId, disciplinaId, estaLigada){
 }
 
 async function deletarDisciplina(id, nome, turmaId){
-  if(!confirm(`Apagar a disciplina "${nome}"?\n\nO CONTEÚDO dela (bimestres, atividades, pacote do Calvão) e o progresso dos alunos NESTA disciplina serão apagados.\n\nOs alunos e as turmas NÃO são afetados — eles continuam existindo normalmente.`)) return;
+  const cod = prompt(`Apagar a disciplina "${nome}"?\n\nSerá apagado o CONTEÚDO dela (bimestres, PDF por série, atividades, pacote do Calvão) e o progresso dos alunos NESTA disciplina.\nOs alunos e as turmas NÃO são afetados.\n\nDigite o código de confirmação para continuar:`);
+  if(cod === null) return;
+  if(String(cod).trim() !== '777'){ showNotif('❌ Código incorreto. A disciplina não foi apagada.'); return; }
   try{
     await apiFetch('/api/db?action=disciplina-deletar', {id});
     PROF_DISCIPLINAS = PROF_DISCIPLINAS.filter(d=>d.id!==id);
     PROF_VINCULOS = PROF_VINCULOS.filter(v=>v.disciplina_id!==id);
-    if(CDid===id) CDid = null;
-    showNotif(`🗑 Disciplina "${nome}" apagada.`);
+    if(CDid===id){ CDid=null; DB.bimDates={}; DB.seriesPDF={}; }
+    showNotif(`✕ Disciplina "${nome}" apagada.`);
     renderSB();
     if(turmaId) openEditarTurma(turmaId);
   }catch(e){ showNotif('❌ '+e.message); }
@@ -3691,6 +3700,13 @@ async function carregarDisciplinas(){
     const r = await apiFetch('/api/db?action=disciplinas', null, 'GET');
     PROF_DISCIPLINAS = r.disciplinas || [];
     PROF_VINCULOS = r.vinculos || [];
+    // v4 — se ainda não há disciplina ativa, assume a primeira e carrega o conteúdo dela
+    if(!CDid && PROF_DISCIPLINAS.length){
+      CDid = PROF_DISCIPLINAS[0].id;
+      const d0 = PROF_DISCIPLINAS[0];
+      if(d0.bim_dates  && Object.keys(d0.bim_dates).length)  DB.bimDates  = d0.bim_dates;
+      if(d0.series_pdf && Object.keys(d0.series_pdf).length) DB.seriesPDF = d0.series_pdf;
+    }
     renderSB();
   }catch(e){ console.warn('disciplinas:', e.message); }
 }
@@ -3729,8 +3745,26 @@ async function confirmDeletarTurma(){
 let CDid = null; // v4 — disciplina ativa (contexto de conteúdo)
 function selTurma(id, discId){
   CTid=id; CTtab='alunos';
-  CDid = discId || (discAbrevsDaTurma(id).length ? (PROF_VINCULOS.find(v=>v.turma_id===id)||{}).disciplina_id : null);
+  const novaDisc = discId || (discAbrevsDaTurma(id).length ? (PROF_VINCULOS.find(v=>v.turma_id===id)||{}).disciplina_id : null);
+  trocarDisciplinaAtiva(novaDisc);
   renderSB(); renderTurmaView(); toggleProfSidebarMobile(false);
+}
+
+// v4 — troca o CONTEÚDO ativo (bimestres, PDF por série) para o da disciplina
+// escolhida. Antes de trocar, guarda o que está em edição na disciplina anterior.
+function trocarDisciplinaAtiva(novaDiscId){
+  if(CDid === novaDiscId) return;
+  const anterior = PROF_DISCIPLINAS.find(d=>d.id===CDid);
+  if(anterior){
+    anterior.bim_dates  = DB.bimDates  || {};
+    anterior.series_pdf = DB.seriesPDF || {};
+  }
+  CDid = novaDiscId || null;
+  const nova = PROF_DISCIPLINAS.find(d=>d.id===CDid);
+  if(nova){
+    DB.bimDates  = nova.bim_dates  || {};
+    DB.seriesPDF = nova.series_pdf || {};
+  }
 }
 
 function renderTurmaView(){
@@ -7696,7 +7730,13 @@ async function removerBimAtividade(bimN, serie, idx){
 // Persiste seriesPDF no servidor
 async function persistSeriesPDF(){
   try {
-    await apiFetch('/api/db?action=save-profile', { series_pdf: DB.seriesPDF });
+    if(CDid){
+      await apiFetch('/api/db?action=disciplina-conteudo', { id: CDid, seriesPDF: DB.seriesPDF });
+      const d = PROF_DISCIPLINAS.find(x=>x.id===CDid);
+      if(d) d.series_pdf = DB.seriesPDF||{};
+    } else {
+      await apiFetch('/api/db?action=save-profile', { series_pdf: DB.seriesPDF });
+    }
   } catch(e){ console.warn('persist seriesPDF:', e); }
 }
 
