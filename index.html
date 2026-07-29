@@ -1201,6 +1201,16 @@ input, textarea, select{ font-size:14px; }
   <div class="bw" id="bw"></div>
 </div>
 
+<!-- MODAL EDITAR TURMA (v4) -->
+<div class="modal-bg" id="m-editar-turma">
+  <div class="modal" id="m-editar-turma-body"></div>
+</div>
+
+<!-- MODAL PERFIL / ESCOLA (v4) -->
+<div class="modal-bg" id="m-perfil-escola">
+  <div class="modal" id="m-perfil-escola-body" style="max-width:560px"></div>
+</div>
+
 <!-- MODAL TEMA DE CORES -->
 <div class="modal-bg" id="m-tema-cores">
   <div class="modal" id="m-tema-cores-body"></div>
@@ -2770,7 +2780,15 @@ function startApp(){
   document.querySelector('.tl').textContent=disc;
   document.getElementById('t-role').textContent=CR==='professor'?'PROFESSOR':'ALUNO';
   document.getElementById('t-role').className='trole '+(CR==='professor'?'prof':'aluno');
-  document.getElementById('t-user').textContent=CR==='professor'?CU.nome:CU.nome;
+  const tu = document.getElementById('t-user');
+  tu.textContent = CU.nome;
+  // v4 — professor clica no próprio nome para abrir perfil / escola
+  if(CR==='professor'){
+    tu.style.cursor='pointer';
+    tu.title='Meu perfil e escola';
+    tu.onclick = openPerfilEscola;
+    tu.textContent = CU.nome + ' ⚙️';
+  } else { tu.onclick=null; tu.style.cursor='default'; }
   if(CR==='aluno'){
     document.getElementById('a-chip').style.display='flex';
     document.getElementById('s-chip').style.display='flex';
@@ -2898,6 +2916,7 @@ function renderProfApp(){
     <div class="main" id="main-area"></div>`;
   renderSB();
   showProfHome();
+  carregarDisciplinas();
 }
 function toggleProfSidebarMobile(force){
   const sidebar = document.querySelector('.sidebar');
@@ -3403,17 +3422,255 @@ async function setCellTurma(key, val){
 function renderSB(){
   const el=document.getElementById('sb-list'); if(!el)return;
   const turmas=getProfTurmas();
-  el.innerHTML=turmas.map(t=>`
-    <div class="t-tab ${t.id===CTid?'active':''}" style="padding-right:6px">
+  el.innerHTML=turmas.map(t=>{
+    // v4 — mostra a abreviação da disciplina ao lado do ano (ex: "9º Ano A Geo")
+    const abrevs = discAbrevsDaTurma(t.id);
+    const tagDisc = abrevs.length
+      ? `<span style="font-size:9px;font-weight:700;color:var(--purple2);background:var(--purple3);padding:1px 5px;border-radius:5px;margin-left:4px">${abrevs.join(' · ')}</span>` : '';
+    return `
+    <div class="t-tab ${t.id===CTid?'active':''}" style="padding-right:4px">
       <div class="tdot" onclick="selTurma('${t.id}')" style="cursor:pointer"></div>
-      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="selTurma('${t.id}')">${t.ano}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
+      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="selTurma('${t.id}')">${t.ano}${tagDisc}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
       <span class="t-cnt">${t.alunos.length}</span>
-      <button onclick="deletarTurma('${t.id}')" title="Deletar turma" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;line-height:1;border-radius:4px;margin-left:2px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">✕</button>
-    </div>`).join('')||'<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Nenhuma turma</div>';
+      <button onclick="event.stopPropagation();openEditarTurma('${t.id}')" title="Editar turma e disciplina" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
+      <button onclick="event.stopPropagation();deletarTurma('${t.id}')" title="Deletar turma" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+    </div>`;}).join('')||'<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Nenhuma turma</div>';
   const btn=document.getElementById('btn-nt');
   if(btn)btn.disabled=turmas.length>=15;
   const cnt=document.getElementById('sb-turmas-count');
   if(cnt)cnt.textContent=turmas.length?turmas.length:'';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EDITAR TURMA + DISCIPLINA (v4)
+// ══════════════════════════════════════════════════════════════════
+function openEditarTurma(id){
+  const t = getProfTurmas().find(x=>x.id===id);
+  if(!t) return;
+  const vinculadas = PROF_VINCULOS.filter(v=>v.turma_id===id).map(v=>v.disciplina_id);
+  const chips = PROF_DISCIPLINAS.map(d=>{
+    const on = vinculadas.includes(d.id);
+    return `<div onclick="toggleDiscTurma('${id}','${d.id}',${on})" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid ${on?d.cor||'var(--purple2)':'var(--border2)'};background:${on?(d.cor||'#8b5cf6')+'22':'transparent'};color:${on?'var(--text)':'var(--muted)'}">
+      ${on?'✓':'+'} ${d.nome}
+    </div>`;
+  }).join('');
+  document.getElementById('m-editar-turma-body').innerHTML = `
+    <div class="modal-t">✏️ Editar turma</div>
+    <div class="modal-s">Altere os dados da sala e escolha quais disciplinas suas são dadas nela.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+      <div class="fi"><div class="fl">Ano / Série</div><input class="fin" id="et-ano" value="${t.ano||''}"></div>
+      <div class="fi"><div class="fl">Turma</div><input class="fin" id="et-turma" value="${t.turma||''}"></div>
+      <div class="fi"><div class="fl">Período</div><input class="fin" id="et-periodo" value="${t.periodo||''}"></div>
+      <div class="fi"><div class="fl">Aulas por semana</div><input class="fin" id="et-aulas" type="number" min="1" max="10" value="${t.aulasSemanais||2}"></div>
+    </div>
+    <div style="margin-top:14px">
+      <div class="fl" style="margin-bottom:7px">Minhas disciplinas nesta turma</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px">${chips || '<span style="font-size:12px;color:var(--muted)">Nenhuma disciplina cadastrada ainda.</span>'}</div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <input class="fin" id="et-nova-disc" placeholder="Nova disciplina (ex: História)" style="flex:1;font-size:12px">
+        <button class="btn btn-sm" onclick="criarDisciplinaRapida('${id}')">+ Criar</button>
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:6px">💡 O conteúdo de cada disciplina (bimestres, atividades, Calvão) é só seu — nenhum outro professor vê.</div>
+    </div>
+    <div class="modal-ft" style="margin-top:16px">
+      <button class="btn" onclick="closeM('m-editar-turma')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarEditarTurma('${id}')">Salvar</button>
+    </div>`;
+  openM('m-editar-turma');
+}
+
+async function salvarEditarTurma(id){
+  const ano = document.getElementById('et-ano').value.trim();
+  const turma = document.getElementById('et-turma').value.trim();
+  const periodo = document.getElementById('et-periodo').value.trim();
+  const aulas = parseInt(document.getElementById('et-aulas').value,10)||2;
+  if(!ano || !turma){ showNotif('Preencha ano e turma.'); return; }
+  try{
+    await apiFetch('/api/db?action=turma', {op:'update', id, patch:{ano, turma, periodo, aulasSemanais:aulas}});
+    const t = getProfTurmas().find(x=>x.id===id);
+    if(t){ t.ano=ano; t.turma=turma; t.periodo=periodo; t.aulasSemanais=aulas; }
+    closeM('m-editar-turma');
+    renderSB(); if(CTid===id) renderTurmaView();
+    showNotif('✅ Turma atualizada!');
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+async function toggleDiscTurma(turmaId, disciplinaId, estaLigada){
+  try{
+    await apiFetch('/api/db?action=turma-disciplina', {turmaId, disciplinaId, op: estaLigada?'remove':'add'});
+    if(estaLigada){
+      PROF_VINCULOS = PROF_VINCULOS.filter(v=>!(v.turma_id===turmaId && v.disciplina_id===disciplinaId));
+    } else {
+      PROF_VINCULOS.push({turma_id:turmaId, disciplina_id:disciplinaId});
+    }
+    renderSB(); openEditarTurma(turmaId);
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+async function criarDisciplinaRapida(turmaId){
+  const inp = document.getElementById('et-nova-disc');
+  const nome = (inp.value||'').trim();
+  if(!nome){ showNotif('Digite o nome da disciplina.'); return; }
+  try{
+    const r = await apiFetch('/api/db?action=disciplina', {nome});
+    if(r.disciplina){
+      PROF_DISCIPLINAS.push(r.disciplina);
+      await toggleDiscTurma(turmaId, r.disciplina.id, false);
+      showNotif('✅ Disciplina criada e vinculada!');
+    }
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PERFIL DO PROFESSOR + ESCOLA (v4)
+// ══════════════════════════════════════════════════════════════════
+async function openPerfilEscola(){
+  if(CR!=='professor') return;
+  document.getElementById('m-perfil-escola-body').innerHTML =
+    '<div style="padding:30px;text-align:center;color:var(--muted)">Carregando...</div>';
+  openM('m-perfil-escola');
+  try{
+    const info = await apiFetch('/api/db?action=escola-info', null, 'GET');
+    PROF_ESCOLA = info.escola;
+    renderPerfilEscola(info);
+  }catch(e){
+    document.getElementById('m-perfil-escola-body').innerHTML =
+      `<div class="modal-t">🏫 Minha Escola</div>
+       <div style="padding:16px;color:var(--red2);font-size:13px">Erro ao carregar: ${e.message}<br><br>
+       <span style="color:var(--muted)">Confirme que o SQL do sistema de escolas foi rodado no Supabase.</span></div>
+       <div class="modal-ft"><button class="btn" onclick="closeM('m-perfil-escola')">Fechar</button></div>`;
+  }
+}
+
+function renderPerfilEscola(info){
+  const esc = info.escola;
+  const discHtml = PROF_DISCIPLINAS.length
+    ? PROF_DISCIPLINAS.map(d=>`<span class="pill" style="background:${(d.cor||'#8b5cf6')}22;color:var(--text);font-weight:700;margin:0 4px 4px 0;display:inline-block">${d.nome} <span style="color:var(--muted);font-size:10px">(${d.abrev||''})</span></span>`).join('')
+    : '<span style="font-size:12px;color:var(--muted)">Nenhuma ainda — crie ao editar uma turma (✏️).</span>';
+
+  let escolaHtml;
+  if(esc){
+    const colegas = (info.colegas||[]).map(c=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:${c.eu?'var(--purple3)':'transparent'}">
+        <span style="font-size:15px">${c.eu?'👤':'🧑‍🏫'}</span>
+        <div style="flex:1;font-size:12px"><b>${c.nome}</b>${c.eu?' <span style="color:var(--purple2)">(você)</span>':''}<br>
+          <span style="color:var(--muted);font-size:10.5px">${c.disciplina||''}${c.is_approved?'':' · aguardando aprovação'}</span></div>
+      </div>`).join('');
+    escolaHtml = `
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:14px;margin-bottom:14px">
+        <div style="font-size:15px;font-weight:800;color:var(--gold)">🏫 ${esc.nome}</div>
+        <div style="font-size:12px;color:var(--muted2);margin-top:2px">${[esc.cidade,esc.uf].filter(Boolean).join(' · ')||'—'}</div>
+        <div style="display:flex;gap:14px;margin-top:10px;font-size:12px">
+          <span>👥 <b>${info.totais.turmas}</b> turmas</span>
+          <span>🎓 <b>${info.totais.alunos}</b> alunos</span>
+          <span>🧑‍🏫 <b>${(info.colegas||[]).length}</b> professores</span>
+        </div>
+      </div>
+      <div class="fl" style="margin-bottom:6px">Professores nesta escola</div>
+      <div style="max-height:170px;overflow-y:auto;margin-bottom:12px">${colegas}</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px">
+        💡 Professores da mesma escola <b>compartilham as turmas e os alunos</b>. O conteúdo de cada disciplina continua privado.
+      </div>
+      <button class="btn btn-sm" onclick="sairDaEscola()" style="border-color:rgba(252,129,129,.4);color:var(--red2)">Sair desta escola</button>`;
+  } else {
+    escolaHtml = `
+      <div style="background:var(--bg3);border:1px dashed var(--border2);border-radius:var(--r2);padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;color:var(--muted2);line-height:1.6">
+          Você ainda não está vinculado a uma escola. Ao entrar numa, seus colegas da mesma unidade
+          passam a <b>compartilhar as turmas e os alunos</b> com você — cada um com seu próprio conteúdo.
+        </div>
+      </div>
+      <div class="fl" style="margin-bottom:6px">Buscar escola já cadastrada</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input class="fin" id="esc-busca" placeholder="Nome da escola ou cidade (3+ letras)" style="flex:1" onkeydown="if(event.key==='Enter')buscarEscola()">
+        <button class="btn btn-sm" onclick="buscarEscola()">🔎 Buscar</button>
+      </div>
+      <div id="esc-resultados" style="margin-bottom:14px"></div>
+      <div class="fl" style="margin:14px 0 6px">Ou cadastrar uma escola nova</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr .6fr;gap:6px">
+        <input class="fin" id="esc-nome" placeholder="Nome completo da escola">
+        <input class="fin" id="esc-cidade" placeholder="Cidade">
+        <input class="fin" id="esc-uf" placeholder="UF" maxlength="2">
+      </div>
+      <button class="btn btn-p" onclick="criarEscola()" style="width:100%;margin-top:8px">🏫 Cadastrar escola</button>`;
+  }
+
+  document.getElementById('m-perfil-escola-body').innerHTML = `
+    <div class="modal-t">👤 ${CU.nome}</div>
+    <div class="modal-s">${currentProf?.email||''}</div>
+    <div style="margin-top:14px">${escolaHtml}</div>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+      <div class="fl" style="margin-bottom:6px">Minhas disciplinas</div>
+      <div>${discHtml}</div>
+    </div>
+    <div class="modal-ft" style="margin-top:16px"><button class="btn" onclick="closeM('m-perfil-escola')">Fechar</button></div>`;
+}
+
+async function buscarEscola(){
+  const termo = (document.getElementById('esc-busca').value||'').trim();
+  const box = document.getElementById('esc-resultados');
+  if(termo.length<3){ box.innerHTML='<div style="font-size:11px;color:var(--red2)">Digite ao menos 3 letras.</div>'; return; }
+  box.innerHTML='<div style="font-size:12px;color:var(--muted)">Buscando...</div>';
+  try{
+    const r = await apiFetch('/api/db?action=escola-buscar', {termo});
+    const lista = r.escolas||[];
+    box.innerHTML = lista.length ? lista.map(e=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px">
+        <div style="flex:1;font-size:12px"><b>${e.nome}</b><br>
+          <span style="color:var(--muted);font-size:10.5px">${[e.cidade,e.uf].filter(Boolean).join(' · ')} · ${e.professores} professor(es)</span></div>
+        <button class="btn btn-sm btn-p" onclick="entrarNaEscola('${e.id}')">Entrar</button>
+      </div>`).join('')
+      : '<div style="font-size:12px;color:var(--muted)">Nenhuma escola encontrada. Cadastre abaixo.</div>';
+  }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--red2)">'+e.message+'</div>'; }
+}
+
+async function criarEscola(){
+  const nome = (document.getElementById('esc-nome').value||'').trim();
+  const cidade = (document.getElementById('esc-cidade').value||'').trim();
+  const uf = (document.getElementById('esc-uf').value||'').trim();
+  if(nome.length<4){ showNotif('Informe o nome completo da escola.'); return; }
+  try{
+    await apiFetch('/api/db?action=escola-criar', {nome, cidade, uf});
+    showNotif('🏫 Escola cadastrada! Suas turmas e alunos já estão vinculados.');
+    openPerfilEscola();
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+async function entrarNaEscola(escolaId){
+  if(!confirm('Entrar nesta escola?\n\nSuas turmas e alunos passam a ser compartilhados com os professores dela.')) return;
+  try{
+    await apiFetch('/api/db?action=escola-entrar', {escolaId});
+    showNotif('🏫 Você entrou na escola!');
+    openPerfilEscola();
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+async function sairDaEscola(){
+  if(!confirm('Sair desta escola?\n\nVocê deixa de compartilhar turmas e alunos com os colegas.')) return;
+  try{
+    await apiFetch('/api/db?action=escola-sair', {});
+    showNotif('Você saiu da escola.');
+    openPerfilEscola();
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+// v4 — estado das disciplinas do professor (carregado do servidor)
+let PROF_DISCIPLINAS = [], PROF_VINCULOS = [], PROF_ESCOLA = null;
+
+function discAbrevsDaTurma(turmaId){
+  return PROF_VINCULOS.filter(v=>v.turma_id===turmaId).map(v=>{
+    const d = PROF_DISCIPLINAS.find(x=>x.id===v.disciplina_id);
+    return d ? (d.abrev||d.nome.slice(0,4)) : null;
+  }).filter(Boolean);
+}
+
+async function carregarDisciplinas(){
+  try{
+    const r = await apiFetch('/api/db?action=disciplinas', null, 'GET');
+    PROF_DISCIPLINAS = r.disciplinas || [];
+    PROF_VINCULOS = r.vinculos || [];
+    renderSB();
+  }catch(e){ console.warn('disciplinas:', e.message); }
 }
 
 let deletarTurmaId=null;
