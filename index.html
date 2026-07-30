@@ -2789,12 +2789,133 @@ async function escolherPaletaFarme(key, role){
   openTemaCores(role); // re-render com a nova seleção marcada
 }
 
+// ══════════════════════════════════════════════════════════════════
+// DISCIPLINAS DO ALUNO (v4) — um login, várias matérias
+// A AURA é única (soma tudo). O que troca por disciplina: conteúdo do
+// bimestre, limite semanal, aulas usadas, notas, chat e mensagens.
+// ══════════════════════════════════════════════════════════════════
+let ALUNO_DISC_ATIVA = null;
+
+function alunoDiscs(){ return (CU && Array.isArray(CU.disciplinas)) ? CU.disciplinas : []; }
+function alunoDiscAtiva(){
+  const ds = alunoDiscs();
+  return ds.find(d=>d.id===ALUNO_DISC_ATIVA) || ds[0] || null;
+}
+
+// guarda o que está em memória na disciplina atual antes de trocar
+function guardarProgressoDisciplina(){
+  const d = alunoDiscs().find(x=>x.id===ALUNO_DISC_ATIVA);
+  if(!d) return;
+  d.progresso = {
+    missoes: CU.missoes||0,
+    weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
+    superQuestUsed: CU.superQuestUsed||0,
+    calvaoBloqueadoUntil: CU.calvaoBloqueadoUntil||null,
+    iaWarnings: CU.iaWarnings||[],
+    aulasUsadas: CU.aulasUsadas||{},
+    farmHistorico: CU.farmHistorico||[],
+    atividadesPontos: CU.atividadesPontos||{},
+    chatLog: CU.chatLog||[],
+    activeMission: CU.activeMission||null,
+    messages: CU.messages||[]
+  };
+}
+
+// carrega o contexto de uma disciplina para dentro de CU / DB
+function aplicarDisciplinaAluno(discId){
+  const d = alunoDiscs().find(x=>x.id===discId);
+  if(!d) return;
+  ALUNO_DISC_ATIVA = d.id;
+  const p = d.progresso || {};
+  CU.missoes              = p.missoes||0;
+  CU.weeklyCalvaoEarned   = p.weeklyCalvaoEarned||0;
+  CU.superQuestUsed       = p.superQuestUsed||0;
+  CU.calvaoBloqueadoUntil = p.calvaoBloqueadoUntil||null;
+  CU.iaWarnings           = p.iaWarnings||[];
+  CU.aulasUsadas          = p.aulasUsadas||{};
+  CU.farmHistorico        = p.farmHistorico||[];
+  CU.atividadesPontos     = p.atividadesPontos||{};
+  CU.chatLog              = p.chatLog||[];
+  CU.activeMission        = p.activeMission||null;
+  CU.messages             = p.messages||[];
+  const ct = d.conteudo || {};
+  DB.bimDates  = ct.bimDates  || {};
+  DB.seriesPDF = ct.seriesPDF || {};
+  if(currentProf){
+    currentProf.disciplina    = d.nome;
+    currentProf.atividades    = ct.atividades || [];
+    currentProf.calvaoPacote  = Object.assign({}, ct.calvaoPacote||{}, {capSemanalCalvao: d.capSemanal});
+  }
+  try{ localStorage.setItem('aluno_disc_ativa', d.id); }catch(e){}
+}
+
+async function trocarDisciplinaAluno(discId){
+  if(discId===ALUNO_DISC_ATIVA) return;
+  if(missionActive){ showNotif('⚠️ Encerre a missão atual antes de trocar de disciplina.'); return; }
+  guardarProgressoDisciplina();
+  await salvarProgressoDisciplina(); // persiste a que estava aberta
+  aplicarDisciplinaAluno(discId);
+  const d = alunoDiscAtiva();
+  const disc = document.querySelector('.tl');
+  if(disc && d) disc.textContent = d.nome;
+  renderAlunoApp();
+  showNotif('📚 Agora você está em '+(d?d.nome:'—'));
+}
+
+// salva no servidor o progresso da disciplina ativa
+async function salvarProgressoDisciplina(){
+  const d = alunoDiscs().find(x=>x.id===ALUNO_DISC_ATIVA);
+  if(!d) return;
+  try{
+    await fetch(`${API_BASE}/api/student?action=progresso`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        login: studentLogin||CU.login, senha: studentSenha||CU.senha,
+        disciplinaId: d.id,
+        patch: {
+          missoes: CU.missoes||0,
+          weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
+          superQuestUsed: CU.superQuestUsed||0,
+          calvaoBloqueadoUntil: CU.calvaoBloqueadoUntil||null,
+          iaWarnings: CU.iaWarnings||[],
+          aulasUsadas: CU.aulasUsadas||{},
+          farmHistorico: CU.farmHistorico||[],
+          atividadesPontos: CU.atividadesPontos||{},
+          chatLog: CU.chatLog||[],
+          activeMission: CU.activeMission||null,
+          messages: CU.messages||[]
+        }
+      })
+    });
+  }catch(e){ console.warn('salvarProgressoDisciplina:', e); }
+}
+
+// barra de abas mostrada no painel do aluno (só se tiver 2+ disciplinas)
+function abasDisciplinaHtml(){
+  const ds = alunoDiscs();
+  if(ds.length < 2) return '';
+  return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border)">
+    <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:2px">Disciplina</span>
+    ${ds.map(d=>{
+      const on = d.id===ALUNO_DISC_ATIVA;
+      return `<button onclick="trocarDisciplinaAluno('${d.id}')" style="cursor:pointer;border:1.5px solid ${on?(d.cor||'var(--purple2)'):'var(--border2)'};background:${on?(d.cor||'#8b5cf6')+'26':'transparent'};color:${on?'var(--text)':'var(--muted)'};padding:5px 12px;border-radius:16px;font-size:12px;font-weight:700;font-family:'Fredoka',sans-serif">${on?'● ':''}${d.nome}</button>`;
+    }).join('')}
+  </div>`;
+}
+
 function startApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('show');
   // v3 — aplica a paleta de cores salva (professor ou aluno)
   const paletaSalva = CR==='professor' ? (currentProf?.paleta||'roxo') : (CU?.paleta||'roxo');
   aplicarPaletaFarme(paletaSalva);
+  // v4 — aluno com várias disciplinas: ativa a última usada (ou a primeira)
+  if(CR==='aluno' && Array.isArray(CU.disciplinas) && CU.disciplinas.length){
+    let alvo = null;
+    try{ alvo = localStorage.getItem('aluno_disc_ativa'); }catch(e){}
+    if(!alvo || !CU.disciplinas.some(d=>d.id===alvo)) alvo = CU.disciplinas[0].id;
+    aplicarDisciplinaAluno(alvo);
+  }
   const disc=currentProf?.disciplina||'FARME AURA';
   document.querySelector('.tl').textContent=disc;
   document.getElementById('t-role').textContent=CR==='professor'?'PROFESSOR':'ALUNO';
@@ -8154,6 +8275,7 @@ function renderAlunoApp(){
       <div class="a-side-overlay" id="a-side-overlay" onclick="toggleASidebarMobile(false)"></div>
       <div class="aluno-side a-side" id="a-side"></div>
       <div class="aluno-main a-content">
+        ${abasDisciplinaHtml()}
         <!-- BLOCO 5 — Cenário de fundo que reflete a ERA atual do aluno -->
         ${fundoEraSVG(eraAtual)}
         <!-- Badge da Era atual -->
