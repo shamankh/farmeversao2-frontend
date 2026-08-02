@@ -2894,7 +2894,7 @@ async function salvarProgressoDisciplina(){
 function abasDisciplinaHtml(){
   const ds = alunoDiscs();
   if(ds.length < 2) return '';
-  return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border)">
+  return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);position:relative;z-index:5">
     <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:2px">Disciplina</span>
     ${ds.map(d=>{
       const on = d.id===ALUNO_DISC_ATIVA;
