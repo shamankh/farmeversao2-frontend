@@ -3564,22 +3564,36 @@ function renderSB(){
   const el=document.getElementById('sb-list'); if(!el)return;
   const turmas=getProfTurmas();
   // v4 — UMA linha por turma. A disciplina é escolhida ao criar a turma.
-  el.innerHTML = turmas.map(t=>{
-    const discs = discsDaTurma(t.id);
-    const tag = discs.length
-      ? discs.map(d=>`<span style="font-size:9px;font-weight:700;color:${d.cor||'var(--purple2)'};background:${(d.cor||'#8b5cf6')}22;padding:1px 5px;border-radius:5px;margin-left:3px">${d.abrev||d.nome.slice(0,4)}</span>`).join('')
-      : '';
+  // v4c — cada par TURMA × DISCIPLINA vira uma linha própria. Os ALUNOS são os
+  // mesmos (a turma é uma só no banco); muda só o conteúdo de cada disciplina.
+  const linhas = [];
+  turmas.forEach(t=>{
+    const ds = discsDaTurma(t.id);
+    if(!ds.length) linhas.push({t, d:null});
+    else ds.forEach(d=>linhas.push({t, d}));
+  });
+  el.innerHTML = linhas.map(({t,d})=>{
+    const ativo = (t.id===CTid) && (!d || d.id===CDid);
+    const tag = d ? `<span style="font-size:9px;font-weight:700;color:${d.cor||'var(--purple2)'};background:${(d.cor||'#8b5cf6')}22;padding:1px 5px;border-radius:5px;margin-left:3px">${d.abrev||d.nome.slice(0,4)}</span>` : '';
+    const go = `selTurma('${t.id}'${d?`,'${d.id}'`:''})`;
+    // ⚠️ com mais de uma disciplina, o botão da linha remove só ESSA disciplina
+    const varias = discsDaTurma(t.id).length > 1;
+    const acao = (varias && d)
+      ? {fn:`desvincularDisciplinaTurma('${t.id}','${d.id}')`, ic:'✕', tt:`Remover apenas a disciplina ${d.nome} desta turma (alunos preservados)`}
+      : (t.importada
+          ? {fn:`removerMinhaDisciplina('${t.id}')`, ic:'⏏', tt:'Sair desta turma compartilhada (não apaga nada de ninguém)'}
+          : {fn:`deletarTurma('${t.id}')`, ic:'🗑', tt:'APAGAR A TURMA INTEIRA e todos os alunos dela'});
     return `
-    <div class="t-tab ${t.id===CTid?'active':''}" style="padding-right:4px">
-      <div class="tdot" onclick="selTurma('${t.id}')" style="cursor:pointer;${discs[0]?`background:${discs[0].cor||'#8b5cf6'}`:''}"></div>
-      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="selTurma('${t.id}')">${t.ano}${tag}${t.importada?'<span title="Turma compartilhada de outro professor" style="font-size:9px;margin-left:3px">🔗</span>':''}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
+    <div class="t-tab ${ativo?'active':''}" style="padding-right:4px">
+      <div class="tdot" onclick="${go}" style="cursor:pointer;${d?`background:${d.cor||'#8b5cf6'}`:''}"></div>
+      <div style="flex:1;font-size:12px;line-height:1.3;cursor:pointer" onclick="${go}">${t.ano}${tag}${t.importada?'<span title="Turma compartilhada" style="font-size:9px;margin-left:3px">🔗</span>':''}<br><span style="font-size:10px;color:var(--muted)">${t.turma} · ${t.periodo}</span></div>
       <span class="t-cnt">${t.alunos.length}</span>
       <div style="display:flex;flex-direction:column;gap:0;margin-right:1px">
         <span onclick="event.stopPropagation();moverTurma('${t.id}',-1)" title="Subir" style="cursor:pointer;font-size:8px;line-height:8px;color:var(--muted)" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">▲</span>
         <span onclick="event.stopPropagation();moverTurma('${t.id}',1)" title="Descer" style="cursor:pointer;font-size:8px;line-height:8px;color:var(--muted)" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">▼</span>
       </div>
       <button onclick="event.stopPropagation();openEditarTurma('${t.id}')" title="Editar turma" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--purple2)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
-      <button onclick="event.stopPropagation();${t.importada?`removerMinhaDisciplina('${t.id}')`:`deletarTurma('${t.id}')`}" title="${t.importada?'Sair desta turma (não apaga nada de ninguém)':'APAGAR A TURMA INTEIRA (e todos os alunos dela)'}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">${t.importada?'⏏':'🗑'}</button>
+      <button onclick="event.stopPropagation();${acao.fn}" title="${acao.tt}" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 3px;line-height:1;border-radius:4px" onmouseover="this.style.color='var(--red2)'" onmouseout="this.style.color='var(--muted)'">${acao.ic}</button>
     </div>`;}).join('')||'<div style="padding:8px 12px;font-size:12px;color:var(--muted)">Nenhuma turma</div>';
   const btn=document.getElementById('btn-nt');
   if(btn)btn.disabled=turmas.length>=15;
@@ -3603,6 +3617,28 @@ async function moverTurma(id, delta){
   renderSB();
   try{ await apiFetch('/api/db?action=turma-reordenar', {ordem: getProfTurmas().map(t=>t.id)}); }
   catch(e){ console.warn('reordenar:', e); }
+}
+
+// v4c — remove apenas UMA disciplina desta turma. Os alunos e as outras
+// disciplinas continuam intactos — não apaga turma nem aluno nenhum.
+async function desvincularDisciplinaTurma(turmaId, discId){
+  const t = DB.turmas.find(x=>x.id===turmaId);
+  const d = PROF_DISCIPLINAS.find(x=>x.id===discId);
+  if(!t || !d) return;
+  const cod = prompt(`Remover a disciplina "${d.nome}" da turma ${t.ano} — ${t.turma}?\n\n✔ Os ${t.alunos.length} alunos NÃO são apagados.\n✔ Suas outras disciplinas nesta turma continuam.\n✖ O conteúdo de "${d.nome}" nesta turma deixa de aparecer.\n\nDigite o código de confirmação:`);
+  if(cod === null) return;
+  if(String(cod).trim() !== '777'){ showNotif('❌ Código incorreto. Nada foi removido.'); return; }
+  try{
+    await apiFetch('/api/db?action=turma-disciplina', {turmaId, disciplinaId:discId, op:'remove'});
+    PROF_VINCULOS = PROF_VINCULOS.filter(v=>!(v.turma_id===turmaId && v.disciplina_id===discId));
+    if(CDid===discId){
+      const restantes = discsDaTurma(turmaId);
+      trocarDisciplinaAtiva(restantes.length ? restantes[0].id : null);
+    }
+    renderSB();
+    if(CTid===turmaId) renderTurmaView();
+    showNotif(`✕ "${d.nome}" removida desta turma. Alunos preservados.`);
+  }catch(e){ showNotif('❌ '+e.message); }
 }
 
 // v4 — sair de uma turma importada (remove só a MINHA disciplina dela)
@@ -4030,15 +4066,16 @@ function renderTurmaView(){
   if(discs.length && !discs.some(d=>d.id===CDid)) trocarDisciplinaAtiva(discs[0].id);
   const discAtiva = discs.find(d=>d.id===CDid) || discs[0] || null;
   const seletorDisc = discs.length>1 ? `
-    <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-      ${discs.map(d=>`<button onclick="selecionarDisciplinaTurma('${d.id}')" style="cursor:pointer;border:1.5px solid ${d.id===CDid?(d.cor||'var(--purple2)'):'var(--border2)'};background:${d.id===CDid?(d.cor||'#8b5cf6')+'26':'transparent'};color:${d.id===CDid?'var(--text)':'var(--muted)'};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:700">${d.nome}</button>`).join('')}
+    <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Disciplina</span>
+      ${discs.map(d=>`<button onclick="selecionarDisciplinaTurma('${d.id}')" style="cursor:pointer;border:1.5px solid ${d.id===CDid?(d.cor||'var(--purple2)'):'var(--border2)'};background:${d.id===CDid?(d.cor||'#8b5cf6')+'26':'transparent'};color:${d.id===CDid?'var(--text)':'var(--muted)'};padding:3px 12px;border-radius:14px;font-size:11.5px;font-weight:700">${d.id===CDid?'● ':''}${d.nome}</button>`).join('')}
     </div>` : '';
   document.getElementById('main-area').innerHTML=`
     <div class="tv">
       <div class="th">
         <div>
           <div class="th-title">${t.ano} — ${t.turma}${discAtiva?` <span style="color:${discAtiva.cor||'var(--purple2)'};font-size:16px;font-weight:700">· ${discAtiva.nome}</span>`:''}</div>
-          <div class="th-sub">${t.periodo} · ${t.alunos.length} aluno(s)</div>
+          <div class="th-sub">${t.periodo} · ${t.alunos.length} aluno(s)${discAtiva?` · conteúdo de <b style="color:${discAtiva.cor||'var(--purple2)'}">${discAtiva.nome}</b>`:''}${t.importada?' · <span style="color:var(--gold)">🔗 turma compartilhada</span>':''}</div>
           ${seletorDisc}
         </div>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
