@@ -1201,6 +1201,11 @@ input, textarea, select{ font-size:14px; }
   <div class="bw" id="bw"></div>
 </div>
 
+<!-- MODAL GERAR LOTE DE CÓDIGOS (v5) -->
+<div class="modal-bg" id="m-gerar-lote">
+  <div class="modal" id="m-gerar-lote-body" style="max-width:520px"></div>
+</div>
+
 <!-- MODAL IMPORTAR TURMA (v4) -->
 <div class="modal-bg" id="m-importar-turma">
   <div class="modal" id="m-importar-turma-body" style="max-width:460px"></div>
@@ -6168,7 +6173,7 @@ function renderCodigosProf(){
           <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900">🎟️ Códigos de Resgate</div>
           <div style="font-size:12px;color:var(--muted2);margin-top:2px">Gere lotes de 100, imprima as raspadinhas e distribua em aula. Uso único por código.</div>
         </div>
-        <button class="btn btn-p" onclick="gerarLoteCodigosProf()" style="font-family:'Orbitron',monospace;font-weight:900">➕ GERAR LOTE DE 100</button>
+        <button class="btn btn-p" onclick="openGerarLote()" style="font-family:'Orbitron',monospace;font-weight:900">➕ GERAR LOTE</button>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
@@ -6182,11 +6187,69 @@ function renderCodigosProf(){
     </div>`;
 }
 
-async function gerarLoteCodigosProf(){
-  if(!confirm('Gerar um novo lote de 100 códigos?\n\nDistribuição: 60 comuns (Nv1-5) · 30 raros (Nv6-10) · 9 épicos (Nv11-14) · 1 lendário (Nv15).')) return;
+const CODIGO_PERIODOS_UI = {
+  vapor:     {nome:'Vapor (1ª)',     emoji:'⚙️', faixa:'Nv 1–4',   cor:'#c79a4d'},
+  eletrica:  {nome:'Elétrica (2ª)',  emoji:'💡', faixa:'Nv 5–9',   cor:'#e0a92e'},
+  automacao: {nome:'Automação (3ª)', emoji:'🔧', faixa:'Nv 10–14', cor:'#3fb89e'},
+  digital:   {nome:'Digital (4ª)',   emoji:'💠', faixa:'Nv 15',    cor:'#a78bfa'},
+};
+
+function openGerarLote(){
+  const periodos = Object.entries(CODIGO_PERIODOS_UI).map(([k,p])=>`
+    <label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;cursor:pointer;background:var(--bg3)">
+      <input type="checkbox" class="gl-per" value="${k}" style="width:16px;height:16px;cursor:pointer">
+      <span style="font-size:18px">${p.emoji}</span>
+      <span style="flex:1"><b style="font-size:12.5px;color:${p.cor}">${p.nome}</b><br><span style="font-size:10px;color:var(--muted)">${p.faixa}</span></span>
+    </label>`).join('');
+  const padroes = [['Docinho',12],['Doces',8],['Super Doce',5],['Brinde',5]];
+  const especiais = padroes.map((e,i)=>`
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <input class="fin gl-esp-nome" value="${e[0]}" placeholder="Nome do prêmio" style="flex:1;font-size:12px">
+      <input class="fin gl-esp-qtd" type="number" min="0" max="200" value="${e[1]}" style="width:70px;font-size:12px;text-align:center">
+    </div>`).join('');
+  document.getElementById('m-gerar-lote-body').innerHTML = `
+    <div class="modal-t">🎫 Gerar lote de códigos</div>
+    <div class="modal-s">Escolha em quais fases da Revolução Industrial os prêmios devem se concentrar. Sem marcar nada, o lote sai com todos os níveis (1 a 15).</div>
+
+    <div class="fl" style="margin:14px 0 7px">Períodos (marque um ou mais)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">${periodos}</div>
+    <div style="font-size:10.5px;color:var(--muted);margin-top:7px">💡 Se a turma toda está no início, marque só <b>Vapor</b> — assim os prêmios são úteis para quem está começando.</div>
+
+    <div class="fl" style="margin:16px 0 7px">🎁 Códigos especiais — prêmios que você entrega em sala</div>
+    <div style="display:flex;gap:6px;font-size:10px;color:var(--muted);margin-bottom:4px">
+      <span style="flex:1">Nome do prêmio</span><span style="width:70px;text-align:center">Qtde</span>
+    </div>
+    ${especiais}
+    <div style="font-size:10.5px;color:var(--muted);margin-top:5px">Esses códigos <b>não dão nada no jogo</b> — viram uma lembrança no cofre do aluno para ele mostrar a você e receber o prêmio de verdade (chocolate, brinde...). Deixe a quantidade em <b>0</b> para não gerar.</div>
+
+    <div style="background:var(--bg3);border-radius:var(--r);padding:9px 12px;margin-top:14px;font-size:12px">
+      Total do lote: <b id="gl-total" style="color:var(--gold)">130</b> códigos <span style="color:var(--muted)">(100 do jogo + especiais)</span>
+    </div>
+    <div class="modal-ft" style="margin-top:14px">
+      <button class="btn" onclick="closeM('m-gerar-lote')">Cancelar</button>
+      <button class="btn btn-p" onclick="confirmarGerarLote()">🎫 Gerar lote</button>
+    </div>`;
+  openM('m-gerar-lote');
+  document.querySelectorAll('.gl-esp-qtd').forEach(i=>i.addEventListener('input', atualizarTotalLote));
+  atualizarTotalLote();
+}
+
+function atualizarTotalLote(){
+  let soma = 0;
+  document.querySelectorAll('.gl-esp-qtd').forEach(i=>{ soma += parseInt(i.value,10)||0; });
+  const el = document.getElementById('gl-total');
+  if(el) el.textContent = 100 + soma;
+}
+
+async function confirmarGerarLote(){
+  const periodos = [...document.querySelectorAll('.gl-per:checked')].map(i=>i.value);
+  const nomes = [...document.querySelectorAll('.gl-esp-nome')].map(i=>i.value);
+  const qtds  = [...document.querySelectorAll('.gl-esp-qtd')].map(i=>parseInt(i.value,10)||0);
+  const especiais = nomes.map((n,i)=>({nome:n.trim(), qtd:qtds[i]})).filter(e=>e.nome && e.qtd>0);
   try{
     showNotif('🎫 Gerando lote...');
-    const r = await apiFetch('/api/db?action=codigos-gerar', {});
+    const r = await apiFetch('/api/db?action=codigos-gerar', {periodos, especiais});
+    closeM('m-gerar-lote');
     showNotif(`✅ Lote ${r.lote} gerado com ${r.total} códigos!`);
     openCodigosProf();
   }catch(e){ showNotif('❌ Erro: '+e.message); }
@@ -14557,8 +14620,8 @@ function fwRenderVP(){
 // ─── CÓDIGOS RESGATÁVEIS + COFRE (v2) ───
 function fwVCodigos(b){
   const cofre = (typeof CU!=='undefined' && CU && Array.isArray(CU.cofre)) ? CU.cofre : [];
-  const NV_COR = n => n>=15?'#f0b429' : n>=11?'#a78bfa' : n>=6?'#3fb89e' : '#8a97b0';
-  const NV_NOME = n => n>=15?'LENDÁRIO' : n>=11?'ÉPICO' : n>=6?'RARO' : 'COMUM';
+  const NV_COR = n => n===0?'#ff6b9d' : n>=15?'#f0b429' : n>=11?'#a78bfa' : n>=6?'#3fb89e' : '#8a97b0';
+  const NV_NOME = n => n===0?'PRÊMIO EM SALA' : n>=15?'LENDÁRIO' : n>=11?'ÉPICO' : n>=6?'RARO' : 'COMUM';
   const EMOJI = p => p.tipo==='recurso'?'📦' : p.tipo==='aura'?'✨' : p.tipo==='mft'?'🏭' : p.tipo==='defesa'?'🛡️' : p.tipo==='tropa'?'⚔️' : p.tipo==='escudo'?'🔰' : p.tipo==='ego'?'💎' : '🎁';
   let itensHTML = '';
   if(!cofre.length){
@@ -14569,7 +14632,7 @@ function fwVCodigos(b){
         <div style="font-size:20px">${EMOJI(item)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:700;color:#e6ecf7">${item.label||'Prêmio'}</div>
-          <div style="font-size:9px;color:${NV_COR(item.nivel||1)};font-weight:700;letter-spacing:.5px">NÍVEL ${item.nivel||'?'} · ${NV_NOME(item.nivel||1)}</div>
+          <div style="font-size:9px;color:${NV_COR(item.nivel===0?0:(item.nivel||1))};font-weight:700;letter-spacing:.5px">${item.nivel===0?'🎁 '+NV_NOME(0):'NÍVEL '+(item.nivel||'?')+' · '+NV_NOME(item.nivel||1)}</div>
         </div>
         <button onclick="fwCofreUsar('${item.id}')" style="background:linear-gradient(135deg,#7c5cfc,#a78bfa);border:none;color:#fff;padding:7px 14px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Orbitron',monospace">USAR</button>
       </div>`;
