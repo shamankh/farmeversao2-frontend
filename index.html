@@ -2049,6 +2049,21 @@ function initHearts(aluno){
   if(aluno.heartWeek === undefined || aluno.heartWeek === null) aluno.heartWeek = Date.now();
   if(aluno.superQuestUsed === undefined || aluno.superQuestUsed === null) aluno.superQuestUsed = 0;
   if(aluno.weeklyCalvaoEarned === undefined || aluno.weeklyCalvaoEarned === null) aluno.weeklyCalvaoEarned = 0;
+
+  // v5 — RESET SEMANAL AUTOMÁTICO (corrige bug: o contador nunca zerava sozinho).
+  // Guardamos a chave da semana junto com o valor. Quando a semana vira
+  // (segunda 7h de Brasília), o contador volta a zero uma única vez.
+  const semanaAgora = farmeSemanaAtual();
+  if(aluno.calvaoSemanaRef !== semanaAgora){
+    // só zera de fato se já havia uma semana anterior registrada;
+    // na primeira vez apenas carimba a semana atual sem apagar nada.
+    if(aluno.calvaoSemanaRef){
+      aluno.weeklyCalvaoEarned = 0;
+      aluno.superQuestUsed = 0;
+      aluno._calvaoResetou = true; // sinaliza para persistir no servidor
+    }
+    aluno.calvaoSemanaRef = semanaAgora;
+  }
   return aluno.hearts;
 }
 
@@ -2814,6 +2829,7 @@ function guardarProgressoDisciplina(){
   d.progresso = {
     missoes: CU.missoes||0,
     weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
+    calvaoSemanaRef: CU.calvaoSemanaRef||null,
     superQuestUsed: CU.superQuestUsed||0,
     calvaoBloqueadoUntil: CU.calvaoBloqueadoUntil||null,
     iaWarnings: CU.iaWarnings||[],
@@ -2834,6 +2850,7 @@ function aplicarDisciplinaAluno(discId){
   const p = d.progresso || {};
   CU.missoes              = p.missoes||0;
   CU.weeklyCalvaoEarned   = p.weeklyCalvaoEarned||0;
+  CU.calvaoSemanaRef      = p.calvaoSemanaRef||null;
   CU.superQuestUsed       = p.superQuestUsed||0;
   CU.calvaoBloqueadoUntil = p.calvaoBloqueadoUntil||null;
   CU.iaWarnings           = p.iaWarnings||[];
@@ -2880,6 +2897,7 @@ async function salvarProgressoDisciplina(){
         patch: {
           missoes: CU.missoes||0,
           weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
+          calvaoSemanaRef: CU.calvaoSemanaRef||null,
           superQuestUsed: CU.superQuestUsed||0,
           calvaoBloqueadoUntil: CU.calvaoBloqueadoUntil||null,
           iaWarnings: CU.iaWarnings||[],
@@ -2914,6 +2932,18 @@ function startApp(){
   // v3 — aplica a paleta de cores salva (professor ou aluno)
   const paletaSalva = CR==='professor' ? (currentProf?.paleta||'roxo') : (CU?.paleta||'roxo');
   aplicarPaletaFarme(paletaSalva);
+  // v5 — se o reset semanal disparou ao carregar, persiste no servidor agora
+  if(CR==='aluno' && CU && CU._calvaoResetou){
+    delete CU._calvaoResetou;
+    setTimeout(()=>{
+      try{
+        fetch(`${API_BASE}/api/student?action=update`,{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({login:studentLogin||CU.login,senha:studentSenha||CU.senha,
+            patch:{weeklyCalvaoEarned:0, superQuestUsed:0, calvaoSemanaRef:CU.calvaoSemanaRef}})});
+        if(typeof salvarProgressoDisciplina==='function') salvarProgressoDisciplina();
+      }catch(e){}
+    }, 600);
+  }
   // v4 — aluno com várias disciplinas: ativa a última usada (ou a primeira)
   if(CR==='aluno' && Array.isArray(CU.disciplinas) && CU.disciplinas.length){
     let alvo = null;
@@ -9870,7 +9900,7 @@ function renderMissaoContent(){
           </div>
           <div class="chat-msgs" id="chat-msgs"></div>
           <div class="chat-in-row">
-            <textarea class="chat-in" id="chat-in" rows="1" placeholder="Digite (ou fale 🎤) sua resposta com suas palavras... (Enter para enviar)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}" onpaste="return bloquearColar(event)" oncontextmenu="return bloquearColar(event)"></textarea>
+            <textarea class="chat-in" id="chat-in" rows="1" placeholder="Digite (ou fale 🎤) sua resposta com suas palavras... (Enter para enviar)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}" onpaste="return bloquearColar(event)" oncontextmenu="return bloquearColar(event)" ondrop="return bloquearColar(event)" ondragover="return bloquearColar(event)" oncut="return bloquearColar(event)" oninput="vigiarDigitacao(this)" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
             <button class="send-btn" id="mic-btn" onclick="toggleDitado()" title="Falar em vez de escrever" style="background:var(--bg4);border:1px solid var(--border2);min-width:44px">🎤</button>
             <button class="send-btn" id="send-btn" onclick="sendMsg()">ENVIAR</button>
           </div>
@@ -11023,6 +11053,7 @@ function startNewMission(){
           hearts: CU.hearts,
           heartWeek: CU.heartWeek,
           weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
+          calvaoSemanaRef: CU.calvaoSemanaRef||null,
           superQuestUsed: CU.superQuestUsed||0,
           activeMission: CU.activeMission
         }
@@ -11113,6 +11144,41 @@ function bloquearColar(event){
   return false;
 }
 
+// v5 — VIGIA DE DIGITAÇÃO: pega qualquer inserção em BLOCO, não importa o método
+// (arrastar da outra aba, sugestão de colar do teclado do celular, autofill...).
+// A regra é simples: digitando, entra 1 caractere por vez; qualquer salto grande
+// de uma só vez é bloqueado e o texto volta ao que estava. O ditado por voz é
+// liberado explicitamente (marcamos antes de inserir).
+let _ultimoTextoChat = '';
+let _permitirInsercaoGrande = false;
+const LIMITE_INSERCAO = 12; // caracteres de uma vez; acima disso é bloco colado
+
+function vigiarDigitacao(el){
+  const atual = el.value || '';
+  const antes = _ultimoTextoChat || '';
+  const salto = atual.length - antes.length;
+
+  if(_permitirInsercaoGrande){          // veio do microfone: liberado
+    _permitirInsercaoGrande = false;
+    _ultimoTextoChat = atual;
+    return;
+  }
+  if(salto > LIMITE_INSERCAO){
+    el.value = antes;                   // desfaz a inserção em bloco
+    _ultimoTextoChat = antes;
+    if(!_avisoColarMostrado){
+      showNotif('✍️ Aqui é pra escrever com suas palavras! Se preferir, usa o 🎤 pra falar.');
+      _avisoColarMostrado = true;
+      setTimeout(()=>{_avisoColarMostrado=false;}, 4000);
+    }
+    return;
+  }
+  _ultimoTextoChat = atual;
+}
+
+// zera a referência sempre que a caixa é limpa pelo próprio sistema
+function resetarVigiaChat(){ _ultimoTextoChat = ''; }
+
 // v3 — ditado por voz (Web Speech API): alternativa a digitar, não a colar.
 let _reconhecimentoVoz = null, _ditando = false;
 function toggleDitado(){
@@ -11139,7 +11205,9 @@ function toggleDitado(){
   _reconhecimentoVoz.onresult = (e)=>{
     const texto = e.results[0][0].transcript;
     if(input){
+      _permitirInsercaoGrande = true;   // voz é permitida: não é cola
       input.value = (input.value ? input.value.trim()+' ' : '') + texto;
+      _ultimoTextoChat = input.value;
       input.focus();
     }
   };
@@ -11160,7 +11228,7 @@ async function sendMsg(){
   
   const input=document.getElementById('chat-in'); if(!input)return;
   const text=input.value.trim(); if(!text)return;
-  input.value='';
+  input.value=''; resetarVigiaChat();
   addUserMsg(text);
   chatHistory.push({role:'user',content:text});
   isAITyping=true;
