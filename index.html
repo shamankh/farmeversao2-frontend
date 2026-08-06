@@ -2050,9 +2050,8 @@ function initHearts(aluno){
   if(aluno.superQuestUsed === undefined || aluno.superQuestUsed === null) aluno.superQuestUsed = 0;
   if(aluno.weeklyCalvaoEarned === undefined || aluno.weeklyCalvaoEarned === null) aluno.weeklyCalvaoEarned = 0;
 
-  // v5 — RESET SEMANAL AUTOMÁTICO (corrige bug: o contador nunca zerava sozinho).
-  // Guardamos a chave da semana junto com o valor. Quando a semana vira
-  // (segunda 7h de Brasília), o contador volta a zero uma única vez.
+  // v6 — RESET SEMANAL AUTOMÁTICO: toda segunda 5h de Brasília, zera o limite
+  // do Calvão e a Super Quest. Corações não existem mais no sistema (farm livre).
   const semanaAgora = farmeSemanaAtual();
   if(aluno.calvaoSemanaRef !== semanaAgora){
     // só zera de fato se já havia uma semana anterior registrada;
@@ -2097,10 +2096,10 @@ function farmeSemanaAtual(){
   const hora = brasilia.getUTCHours();
   // quantos dias recuar para chegar na segunda
   let diasDesdeSegunda = (diaSemana + 6) % 7; // seg=0, ter=1,... dom=6
-  // se for segunda mas antes das 7h, ainda conta como semana anterior
-  if(diaSemana === 1 && hora < 7) diasDesdeSegunda = 7;
+  // se for segunda mas antes das 5h, ainda conta como semana anterior
+  if(diaSemana === 1 && hora < 5) diasDesdeSegunda = 7;
   const inicioSemana = new Date(brasilia.getTime() - diasDesdeSegunda*86400000);
-  inicioSemana.setUTCHours(7,0,0,0);
+  inicioSemana.setUTCHours(5,0,0,0);
   // se estamos antes do início calculado, recua uma semana
   if(brasilia.getTime() < inicioSemana.getTime()){
     inicioSemana.setTime(inicioSemana.getTime() - 7*86400000);
@@ -2750,7 +2749,58 @@ const PALETAS_FARME = {
     border:'rgba(13,74,76,0.10)',border2:'rgba(13,74,76,0.16)',border3:'rgba(13,74,76,0.24)'},
   coral:{nome:'🪸 Coral Suave',bg:'#fef4f2',bg2:'#fde3de',bg3:'#fbc9c0',bg4:'#f8ac9f',bg5:'#f58f7e',
     text:'#6b2318',muted:'#bd6f5f',muted2:'#8f4535',purple:'#f2705a',purple2:'#f79a89',purple3:'rgba(242,112,90,.20)',
-    border:'rgba(107,35,24,0.10)',border2:'rgba(107,35,24,0.16)',border3:'rgba(107,35,24,0.24)'}
+    border:'rgba(107,35,24,0.10)',border2:'rgba(107,35,24,0.16)',border3:'rgba(107,35,24,0.24)'},
+
+  // ── PALHA (tons de campo, palha e madeira) ──
+  palhaDourada:{nome:'🌾 Palha Dourada',bg:'#fbf6e9',bg2:'#f5ecd0',bg3:'#ecdcac',bg4:'#e0c780',bg5:'#d3b25a',
+    text:'#4a3a12',muted:'#a08a4f',muted2:'#7a6530',purple:'#c9962e',purple2:'#e0b451',purple3:'rgba(201,150,46,.20)',
+    border:'rgba(74,58,18,0.10)',border2:'rgba(74,58,18,0.16)',border3:'rgba(74,58,18,0.24)'},
+  palhaRustica:{nome:'🌿 Palha Rústica',bg:'#f5f0e3',bg2:'#e9dfc4',bg3:'#d8c79c',bg4:'#c2ab74',bg5:'#a88e54',
+    text:'#3e3316',muted:'#8f7c50',muted2:'#6b5a34',purple:'#8a6d32',purple2:'#ab8c52',purple3:'rgba(138,109,50,.20)',
+    border:'rgba(62,51,22,0.10)',border2:'rgba(62,51,22,0.16)',border3:'rgba(62,51,22,0.24)'},
+  palhaClara:{nome:'☀️ Palha Clara',bg:'#fefbf2',bg2:'#f9f1dc',bg3:'#f1e2b8',bg4:'#e6cd8a',bg5:'#d8b75f',
+    text:'#5c4a1a',muted:'#a6935c',muted2:'#7d6b38',purple:'#d9a933',purple2:'#eec766',purple3:'rgba(217,169,51,.20)',
+    border:'rgba(92,74,26,0.10)',border2:'rgba(92,74,26,0.16)',border3:'rgba(92,74,26,0.24)'},
+  palhaOutono:{nome:'🍂 Palha Outono',bg:'#fbf2e4',bg2:'#f2ddba',bg3:'#e6c088',bg4:'#d49f5c',bg5:'#bc7f3d',
+    text:'#4e2e0f',muted:'#a17641',muted2:'#7a5527',purple:'#c9762e',purple2:'#e0954f',purple3:'rgba(201,118,46,.20)',
+    border:'rgba(78,46,15,0.10)',border2:'rgba(78,46,15,0.16)',border3:'rgba(78,46,15,0.24)'},
+  palhaCampo:{nome:'🌱 Palha de Campo',bg:'#f7f6e6',bg2:'#eae7c2',bg3:'#d6d095',bg4:'#bcb669',bg5:'#9fa049',
+    text:'#38401a',muted:'#83863f',muted2:'#5f6329',purple:'#8a9a3a',purple2:'#aab857',purple3:'rgba(138,154,58,.20)',
+    border:'rgba(56,64,26,0.10)',border2:'rgba(56,64,26,0.16)',border3:'rgba(56,64,26,0.24)'},
+
+  // ── MASCULINO (escuros, sóbrios, cores fortes) ──
+  aco:{nome:'🔩 Aço',bg:'#14181c',bg2:'#1c2228',bg3:'#262e36',bg4:'#303a44',bg5:'#3b4752',
+    text:'#eef2f5',muted:'#7e8b96',muted2:'#a3b0ba',purple:'#5b8ca3',purple2:'#7fadc4',purple3:'rgba(91,140,163,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
+  grafite:{nome:'⬛ Grafite',bg:'#121212',bg2:'#1c1c1c',bg3:'#262626',bg4:'#313131',bg5:'#3d3d3d',
+    text:'#f0f0f0',muted:'#7d7d7d',muted2:'#a3a3a3',purple:'#8a8a8a',purple2:'#b0b0b0',purple3:'rgba(138,138,138,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
+  verdeMilitar:{nome:'🟩 Verde Militar',bg:'#141810',bg2:'#1e2418',bg3:'#283020',bg4:'#333d29',bg5:'#3f4b32',
+    text:'#eef2e6',muted:'#7d8a6c',muted2:'#a3b18e',purple:'#5f7a3d',purple2:'#82a15c',purple3:'rgba(95,122,61,.18)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
+  vinho:{nome:'🍷 Vinho',bg:'#1a1012',bg2:'#26171a',bg3:'#332025',bg4:'#402931',bg5:'#4d323c',
+    text:'#f5eaec',muted:'#a3767e',muted2:'#c4a0a7',purple:'#8b3a4a',purple2:'#b05a6b',purple3:'rgba(139,58,74,.20)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
+  azulMarinho:{nome:'⚓ Azul Marinho',bg:'#0d1220',bg2:'#141b30',bg3:'#1b2440',bg4:'#232e50',bg5:'#2c3960',
+    text:'#e9edf7',muted:'#748099',muted2:'#9aa5c0',purple:'#3a5aa8',purple2:'#5c7ec4',purple3:'rgba(58,90,168,.20)',
+    border:'rgba(255,255,255,0.10)',border2:'rgba(255,255,255,0.16)',border3:'rgba(255,255,255,0.24)'},
+
+  // ── BARBIE (rosa vibrante, glamouroso) ──
+  barbieChoque:{nome:'💗 Barbie Rosa Choque',bg:'#fff0f8',bg2:'#ffd9ec',bg3:'#ffb8dd',bg4:'#ff8fc9',bg5:'#ff5fb0',
+    text:'#5c0a3a',muted:'#c14f92',muted2:'#e070ac',purple:'#ff1f8f',purple2:'#ff5fb0',purple3:'rgba(255,31,143,.20)',
+    border:'rgba(92,10,58,0.10)',border2:'rgba(92,10,58,0.16)',border3:'rgba(92,10,58,0.24)'},
+  barbieGlamour:{nome:'✨ Barbie Glamour',bg:'#fff5ec',bg2:'#ffe4d6',bg3:'#ffc9d8',bg4:'#ff9fc0',bg5:'#f5c344',
+    text:'#5c1a3a',muted:'#c47a8a',muted2:'#e0a0b0',purple:'#e8368e',purple2:'#f5c344',purple3:'rgba(232,54,142,.20)',
+    border:'rgba(92,26,58,0.10)',border2:'rgba(92,26,58,0.16)',border3:'rgba(92,26,58,0.24)'},
+  barbieFofa:{nome:'🎀 Barbie Fofa',bg:'#fef2fb',bg2:'#fce0f5',bg3:'#f8c3ea',bg4:'#f19edb',bg5:'#e878c8',
+    text:'#4a1049',muted:'#a566a0',muted2:'#c98cc4',purple:'#d94fc4',purple2:'#e878c8',purple3:'rgba(217,79,196,.20)',
+    border:'rgba(74,16,73,0.10)',border2:'rgba(74,16,73,0.16)',border3:'rgba(74,16,73,0.24)'},
+  barbieGlitter:{nome:'💫 Barbie Glitter',bg:'#fdf6ff',bg2:'#f6e4ff',bg3:'#ecc9ff',bg4:'#dda3fb',bg5:'#cf7ef2',
+    text:'#3d0a52',muted:'#9a68ab',muted2:'#c093d1',purple:'#b845e0',purple2:'#d17ef0',purple3:'rgba(184,69,224,.20)',
+    border:'rgba(61,10,82,0.10)',border2:'rgba(61,10,82,0.16)',border3:'rgba(61,10,82,0.24)'},
+  barbiePrincesa:{nome:'👑 Barbie Princesa',bg:'#fff0f6',bg2:'#ffd9e8',bg3:'#ffb3d1',bg4:'#f78ac2',bg5:'#e05fb0',
+    text:'#4a0a35',muted:'#a85f8c',muted2:'#cc8ab0',purple:'#e0338f',purple2:'#f75fae',purple3:'rgba(224,51,143,.20)',
+    border:'rgba(74,10,53,0.10)',border2:'rgba(74,10,53,0.16)',border3:'rgba(74,10,53,0.24)'}
 };
 function aplicarPaletaFarme(key){
   const p=PALETAS_FARME[key]||PALETAS_FARME.roxo;const r=document.documentElement.style;
@@ -2772,6 +2822,9 @@ function openTemaCores(role){
   const atual = role==='prof' ? (currentProf?.paleta||'roxo') : (CU?.paleta||'roxo');
   const escurosKeys = ['roxo','azul','verde','marte','solar','rosa'];
   const pastelKeys = ['rosabebe','rosachiclete','sakura','menta','ceu','lilas','pessego','limao','turquesa','coral'];
+  const palhaKeys = ['palhaDourada','palhaRustica','palhaClara','palhaOutono','palhaCampo'];
+  const masculinoKeys = ['aco','grafite','verdeMilitar','vinho','azulMarinho'];
+  const barbieKeys = ['barbieChoque','barbieGlamour','barbieFofa','barbieGlitter','barbiePrincesa'];
   const swatch = k => {
     const p = PALETAS_FARME[k];
     return `<div onclick="escolherPaletaFarme('${k}','${role}')" style="cursor:pointer;border:2px solid ${k===atual?p.purple:'transparent'};border-radius:12px;padding:9px;text-align:center;background:${p.bg2};transition:.15s">
@@ -2783,13 +2836,17 @@ function openTemaCores(role){
       <div style="font-size:11px;font-weight:700;color:${p.text}">${p.nome}${k===atual?' ✓':''}</div>
     </div>`;
   };
+  const secao = (titulo, keys) => `
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">${titulo}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${keys.map(swatch).join('')}</div>`;
   const html = `
     <div class="modal-t">🎨 Tema de Cores</div>
     <div class="modal-s">Escolha a paleta da sua experiência. Salva automaticamente e é só sua — cada aluno e o professor têm a própria.</div>
-    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">Escuros</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${escurosKeys.map(swatch).join('')}</div>
-    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">Pastéis</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${pastelKeys.map(swatch).join('')}</div>
+    ${secao('Escuros', escurosKeys)}
+    ${secao('Pastéis', pastelKeys)}
+    ${secao('🌾 Palha', palhaKeys)}
+    ${secao('🔩 Masculino', masculinoKeys)}
+    ${secao('💗 Barbie', barbieKeys)}
     <div class="modal-ft"><button class="btn" onclick="closeM('m-tema-cores')">Fechar</button></div>`;
   document.getElementById('m-tema-cores-body').innerHTML = html;
   openM('m-tema-cores');
@@ -3759,6 +3816,39 @@ function openImportarTurma(){
   openM('m-importar-turma');
 }
 
+// v6 — reseta a senha de TODOS os alunos de uma turma de uma vez
+async function resetarSenhasTurma(turmaId){
+  const t = getProfTurmas().find(x=>x.id===turmaId);
+  if(!t) return;
+  if(!confirm(`Resetar a senha de TODOS os ${t.alunos.length} aluno(s) de ${t.ano} — ${t.turma}?\n\nCada aluno recebe uma senha nova. Os logins não mudam. Isso não pode ser desfeito.`)) return;
+  showNotif('🔑 Gerando senhas novas...');
+  try{
+    const r = await apiFetch('/api/db?action=turma-resetar-senhas', {turmaId});
+    mostrarNovasSenhas(t, r.senhas || []);
+    showNotif(`✅ ${r.total} senha(s) resetada(s)!`);
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+function mostrarNovasSenhas(t, senhas){
+  const linhas = senhas.map(s=>{
+    const aluno = t.alunos.find(a=>a.id===s.id);
+    return `<tr><td style="padding:5px 10px;font-size:12px">${s.nome}</td><td style="padding:5px 10px;font-family:'Orbitron',monospace;font-size:12px;color:var(--gold)">${aluno?aluno.login:'—'}</td><td style="padding:5px 10px;font-family:'Orbitron',monospace;font-size:12px;font-weight:700;color:var(--green2)">${s.senha}</td></tr>`;
+  }).join('');
+  document.getElementById('m-editar-turma-body').innerHTML = `
+    <div class="modal-t">🔑 Senhas novas — ${t.ano} · ${t.turma}</div>
+    <div class="modal-s">Anote ou imprima antes de fechar. Depois disso, as senhas antigas não funcionam mais.</div>
+    <div style="max-height:340px;overflow-y:auto;margin-top:12px;border:1px solid var(--border);border-radius:var(--r)">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--bg3)"><th style="padding:6px 10px;font-size:10px;text-align:left;color:var(--muted)">ALUNO</th><th style="padding:6px 10px;font-size:10px;text-align:left;color:var(--muted)">LOGIN</th><th style="padding:6px 10px;font-size:10px;text-align:left;color:var(--muted)">SENHA NOVA</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>
+    <div class="modal-ft" style="margin-top:14px">
+      <button class="btn" onclick="window.print()">🖨️ Imprimir</button>
+      <button class="btn btn-p" onclick="closeM('m-editar-turma')">Fechar</button>
+    </div>`;
+}
+
 function openEditarTurma(id){
   const t = getProfTurmas().find(x=>x.id===id);
   if(!t) return;
@@ -3795,6 +3885,11 @@ function openEditarTurma(id){
         <button class="btn btn-sm" onclick="criarDisciplinaRapida('${id}')">+ Criar</button>
       </div>
       <div style="font-size:10.5px;color:var(--muted);margin-top:6px">💡 O conteúdo de cada disciplina (bimestres, atividades, Calvão) é só seu — nenhum outro professor vê.</div>
+    </div>
+    <div style="margin-top:14px;background:rgba(229,62,62,.06);border:1px solid rgba(229,62,62,.25);border-radius:var(--r);padding:10px 12px">
+      <div class="fl" style="margin-bottom:4px;color:var(--red2)">Zona de risco</div>
+      <button class="btn btn-sm" onclick="resetarSenhasTurma('${id}')" style="border-color:rgba(229,62,62,.4);color:var(--red2);width:100%">🔑 Resetar senha de TODOS os alunos desta turma</button>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:6px">Gera uma senha nova pra cada aluno. Use se algum aluno passou o login pra colegas farmarem por ele.</div>
     </div>
     <div class="modal-ft" style="margin-top:16px">
       <button class="btn" onclick="closeM('m-editar-turma')">Cancelar</button>
@@ -5055,81 +5150,52 @@ async function darLanceLeilao(leilaoId){
 // PATCH 9.2 — RESET MANUAL, SORTEADOR, MP
 // ==============================
 
-// --- RESET DE CORAÇÕES POR TURMA ---
+// --- RESET DO LIMITE SEMANAL DA TURMA (v6 — corrigido: grava na disciplina certa) ---
 async function resetCoracoesTurma(){
-  const senha = prompt('⚠️ Você vai resetar os corações, cap semanal do Calvão e Super Quests de TODOS os alunos desta turma para 3/3.\n\nDigite a senha de confirmação:');
+  const t = DB.turmas.find(x=>x.id===CTid);
+  if(!t) return;
+  const disc = discsDaTurma(t.id).find(d=>d.id===CDid) || discsDaTurma(t.id)[0];
+  if(!disc){ showNotif('Esta turma ainda não tem disciplina vinculada.'); return; }
+  const senha = prompt(`⚠️ Você vai resetar o LIMITE SEMANAL do Calvão e a Super Quest de TODOS os alunos desta turma, na disciplina "${disc.nome}".\n\nDigite a senha de confirmação:`);
   if(!checkSenhaConfirm(senha)){
     if(senha !== null) showNotif('Senha incorreta. Reset cancelado.');
     return;
   }
-  const t = DB.turmas.find(x=>x.id===CTid);
-  if(!t) return;
-  
-  let ok = 0, fail = 0;
-  showNotif('🔄 Resetando corações...');
-  for(const a of t.alunos){
-    a.hearts = HEART_MAX;
-    a.heartWeek = Date.now();
-    a.weeklyCalvaoEarned = 0;
-    a.superQuestUsed = 0;
-    try{
-      await apiFetch('/api/db?action=aluno',{op:'update',id:a.id,patch:{
-        hearts: HEART_MAX,
-        heartWeek: Date.now(),
-        weeklyCalvaoEarned: 0,
-        superQuestUsed: 0
-      }});
-      ok++;
-    }catch(e){ fail++; }
-  }
-  
-  addEgoLog(t, {
-    action: 'reset-manual-corações',
-    details: `Reset manual da turma — ${ok} aluno(s) resetados${fail?` · ${fail} falha(s)`:''}`
-  });
-  saveDB();
-  renderTurmaView();
-  showNotif(`✅ ${ok} aluno(s) tiveram seus corações resetados.${fail?` (${fail} falha(s))`:''}`);
+  showNotif('🔄 Resetando limite semanal...');
+  try{
+    const r = await apiFetch('/api/db?action=progresso-reset', {disciplinaId:disc.id, alunoIds:t.alunos.map(a=>a.id)});
+    addEgoLog(t, { action:'reset-limite-semanal', details:`Reset manual do limite semanal (${disc.nome}) — ${r.total} aluno(s)` });
+    showNotif(`✅ Limite semanal de ${r.total} aluno(s) resetado em ${disc.nome}.`);
+  }catch(e){ showNotif('❌ '+e.message); }
 }
 
-// --- RESET GLOBAL DE TODAS AS TURMAS ---
+// --- RESET GLOBAL (todas as turmas, todas as MINHAS disciplinas em cada uma) ---
 async function resetCoracoesGlobal(){
   const turmas = getProfTurmas();
   const totalAlunos = turmas.reduce((s,t)=>s+t.alunos.length,0);
   if(totalAlunos === 0){ showNotif('Não há alunos para resetar.'); return; }
-  
-  const senha = prompt(`⚠️ RESET GLOBAL\n\nVocê vai resetar os corações de TODOS os ${totalAlunos} alunos de TODAS as ${turmas.length} turmas.\n\nDigite a senha de confirmação:`);
+
+  const senha = prompt(`⚠️ RESET GLOBAL\n\nVocê vai resetar o LIMITE SEMANAL do Calvão e a Super Quest de TODOS os ${totalAlunos} aluno(s), em TODAS as suas disciplinas.\n\nDigite a senha de confirmação:`);
   if(!checkSenhaConfirm(senha)){
     if(senha !== null) showNotif('Senha incorreta. Reset cancelado.');
     return;
   }
-  
-  let ok = 0, fail = 0;
+
+  let ok = 0;
   showNotif('🔄 Reset global em andamento...');
   for(const t of turmas){
-    for(const a of t.alunos){
-      a.hearts = HEART_MAX;
-      a.heartWeek = Date.now();
-      a.weeklyCalvaoEarned = 0;
-      a.superQuestUsed = 0;
+    const discs = discsDaTurma(t.id);
+    for(const d of discs){
       try{
-        await apiFetch('/api/db?action=aluno',{op:'update',id:a.id,patch:{
-          hearts: HEART_MAX,
-          heartWeek: Date.now(),
-          weeklyCalvaoEarned: 0,
-          superQuestUsed: 0
-        }});
-        ok++;
-      }catch(e){ fail++; }
+        const r = await apiFetch('/api/db?action=progresso-reset', {disciplinaId:d.id, alunoIds:t.alunos.map(a=>a.id)});
+        ok += r.total || 0;
+      }catch(e){ /* segue pras próximas */ }
     }
-    addEgoLog(t, {
-      action: 'reset-global',
-      details: `Reset GLOBAL aplicado a esta turma`
-    });
+    addEgoLog(t, { action:'reset-global', details:`Reset GLOBAL do limite semanal aplicado a esta turma` });
   }
   saveDB();
   renderProfApp();
-  showNotif(`✅ Reset global concluído: ${ok} aluno(s)${fail?` · ${fail} falha(s)`:''}`);
+  showNotif(`✅ Reset global concluído: ${ok} aluno(s) resetado(s).`);
 }
 
 // PATCH 9.7 — Liga/desliga o MODO LIVRE (farm sem trava de corações)
@@ -10925,29 +10991,45 @@ async function finalizeMission(byTimer){
     }
   }catch(e){ console.warn('nota farmHistorico:', e); }
 
-  // Persistência no Supabase
+  // v6 — CORREÇÃO DE BUG CRÍTICO: antes, weeklyCalvaoEarned/superQuestUsed
+  // eram salvos na tabela GERAL do aluno, mas o sistema de disciplinas lê
+  // esses valores da tabela de PROGRESSO POR DISCIPLINA. Como nunca eram
+  // gravados lá, o contador "voltava" ao valor antigo a cada novo login,
+  // permitindo farmar muito além do limite semanal configurado.
+  // Agora: a AURA (única, compartilhada) vai para o aluno. O limite semanal,
+  // Super Quest e o resto do progresso vão para a disciplina ativa.
   try{
     await fetch(`${API_BASE}/api/student?action=update`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         login:studentLogin||CU.login,
         senha:studentSenha||CU.senha,
-        patch:{
-          aura:CU.aura,
-          missoes:CU.missoes,
-          hearts:CU.hearts,
-          heartWeek:CU.heartWeek,
-          weeklyCalvaoEarned:CU.weeklyCalvaoEarned,
-          superQuestUsed:CU.superQuestUsed,
-          nextMissionBoost:CU.nextMissionBoost,
-          dobradorRemaining:CU.dobradorRemaining,
-          activeMission:null,
-          calvaoBloqueadoUntil:CU.calvaoBloqueadoUntil||null,
-          iaWarnings:CU.iaWarnings||[],
-          farmHistorico:CU.farmHistorico||[]
-        }
+        patch:{ aura:CU.aura, hearts:CU.hearts, heartWeek:CU.heartWeek }
       })
     });
+    if(ALUNO_DISC_ATIVA && typeof salvarProgressoDisciplina==='function'){
+      await salvarProgressoDisciplina(); // grava weeklyCalvaoEarned/superQuestUsed/etc na disciplina certa
+    } else {
+      // compatibilidade: aluno ainda sem disciplinas migradas
+      await fetch(`${API_BASE}/api/student?action=update`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          login:studentLogin||CU.login,
+          senha:studentSenha||CU.senha,
+          patch:{
+            missoes:CU.missoes,
+            weeklyCalvaoEarned:CU.weeklyCalvaoEarned,
+            superQuestUsed:CU.superQuestUsed,
+            nextMissionBoost:CU.nextMissionBoost,
+            dobradorRemaining:CU.dobradorRemaining,
+            activeMission:null,
+            calvaoBloqueadoUntil:CU.calvaoBloqueadoUntil||null,
+            iaWarnings:CU.iaWarnings||[],
+            farmHistorico:CU.farmHistorico||[]
+          }
+        })
+      });
+    }
   }catch(e){console.warn('finalizeMission save error:',e);}
   
   updateAuraTop();
