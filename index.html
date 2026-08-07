@@ -1995,6 +1995,73 @@ async function aplicarPontuacaoFinal(basePtsRaw, opts={}){
   }
   showNotif(msg);
 }
+// ══════════════════════════════════════════════════════════════════
+// v10 — PONTUAÇÃO POR PERGUNTA (substitui a nota única no fim)
+// A IA agora dá uma notinha a cada pergunta respondida, e o SISTEMA soma
+// no final. Vantagens: se a IA errar o formato numa pergunta, perde-se só
+// aquela fração (não a sessão toda); o aluno vê a barra enchendo em tempo
+// real; e a soma final é determinística (não depende da IA somar certo).
+// ══════════════════════════════════════════════════════════════════
+const CALVAO_TOTAL_PERGUNTAS = 7;
+
+// Valor máximo de UMA pergunta = teto da sessão dividido pelas 7 perguntas.
+// Se o professor mudar o teto (1,500 -> 2,000), isto se ajusta sozinho.
+function valorPorPergunta(){
+  return SESSION_MAX_AURA / CALVAO_TOTAL_PERGUNTAS;
+}
+
+// Notas já dadas nesta sessão, uma por pergunta: {1: 0.05, 2: 0.15, ...}
+let notasPorPergunta = {};
+
+function resetarNotasPergunta(){ notasPorPergunta = {}; }
+
+// Le a tag "NOTA_PERGUNTA: N = X.XXX" que a IA envia a cada pergunta avaliada
+function parseNotaPergunta(reply){
+  if(!reply) return null;
+  const m = reply.match(/NOTA_PERGUNTA\s*:?\s*(\d+)\s*=\s*([\d]+[.,]?\d*)/i);
+  if(!m) return null;
+  const nPergunta = parseInt(m[1], 10);
+  let valor = parseFloat(m[2].replace(',','.'));
+  if(isNaN(nPergunta) || isNaN(valor)) return null;
+  const teto = valorPorPergunta();
+  if(valor < 0) valor = 0;
+  if(valor > teto) valor = teto;
+  return { pergunta: nPergunta, valor };
+}
+
+// Registra a nota de uma pergunta. A ultima avaliacao da MESMA pergunta
+// prevalece (nao soma duas vezes quando o aluno usa a chance extra).
+function registrarNotaPergunta(nPergunta, valor){
+  notasPorPergunta[nPergunta] = valor;
+  atualizarBarraPontuacao();
+}
+
+function totalAcumuladoSessao(){
+  return Object.values(notasPorPergunta).reduce((s,v)=>s+(parseFloat(v)||0), 0);
+}
+
+function qtdPerguntasAvaliadas(){ return Object.keys(notasPorPergunta).length; }
+
+// Barra de progresso da pontuacao, mostrada acima do chat
+function atualizarBarraPontuacao(){
+  const wrap = document.getElementById('calvao-barra-pontos');
+  if(!wrap) return;
+  const total = totalAcumuladoSessao();
+  const teto = SESSION_MAX_AURA;
+  const pct = Math.min(100, (total/teto)*100);
+  const avaliadas = qtdPerguntasAvaliadas();
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Sua pontuacao</span>
+      <span style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--gold)">${fmtAura(total)}</span>
+      <span style="font-size:10.5px;color:var(--muted)">de ${fmtAura(teto)}</span>
+      <span style="font-size:10.5px;color:var(--muted2);margin-left:auto">${avaliadas}/${CALVAO_TOTAL_PERGUNTAS} perguntas</span>
+    </div>
+    <div style="height:8px;background:var(--bg3);border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--purple),var(--gold));transition:width .5s ease"></div>
+    </div>`;
+}
+
 // Tenta primeiro a tag nova "PONTOS_FINAIS: X.XXX" (muito mais estável entre
 // modelos de IA diferentes); se não achar, cai pro regex antigo em texto livre
 // como rede de segurança (compatibilidade com respostas já em andamento).
@@ -9992,6 +10059,7 @@ function renderMissaoContent(){
           </div>
         `}
       </div>
+      ${missionActive ? `<div id="calvao-barra-pontos" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:10px 14px;margin-bottom:12px"></div>` : ''}
       ${showChat ? `
         <div class="chat-box">
           <div class="chat-head">
@@ -10899,48 +10967,51 @@ function contarPerguntasRespondidas(){
 }
 
 async function forcarAvaliacaoFinal(contextoExtra){
-  showTyping();
-  try{
-    const sysFinal = `Você é o Calvão de crIA. A sessão do aluno chegou ao fim e você precisa dar uma AVALIAÇÃO FINAL agora, baseado no que ele respondeu até aqui. Faça um parágrafo curto de feedback e termine a mensagem, na última linha sozinha, com a tag exata "PONTOS_FINAIS: X.XXX".
+  // v10 — a pontuação agora vem da SOMA das notas que a IA já deu pergunta a
+  // pergunta. Não é mais preciso pedir uma "nota final" para a IA nem torcer
+  // para ela somar certo: o sistema soma sozinho, de forma determinística.
+  // Se a IA falhou em pontuar alguma pergunta, perde-se só aquela fração.
+  const total = totalAcumuladoSessao();
+  const avaliadas = qtdPerguntasAvaliadas();
 
-PRINCÍPIO: aluno do Ensino Médio que se esforçou MERECE reconhecimento. Seja generoso quando o aluno engajou, mesmo que a escrita seja simples. Cap desta missão é 2,000 aura. Faixas:
-- INADEQUADO (não respondeu, trolou): 0.100 a 0.250
-- SUPERFICIAL (tentou mas raso): 0.500 a 0.900
-- PARCIAL (engajou com raciocínio próprio): 1.000 a 1.400
-- COMPLETO (respondeu tudo bem): 1.500 a 1.800
-- EXCELENTE (domínio claro do tema): 1.900 a 2.000
-
-Em caso de dúvida entre dois níveis, dê o MAIOR. Não invente nada além disso. A tag "PONTOS_FINAIS: X.XXX" é OBRIGATÓRIA, sozinha na última linha.`;
-    const r = await fetch(`${API_BASE}/api/ai`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        login: studentLogin || CU.login,
-        senha: studentSenha || CU.senha,
-        system: sysFinal,
-        messages: chatHistory.slice(-6),
-        maxTokens: 1500
-      })
-    });
-    const data = await r.json();
-    const reply = data.reply || '';
-    removeTyping();
-    addAIMsg(reply);
-    chatHistory.push({role:'assistant',content:reply});
-    const scoreParsed = parseFinalScore(reply);
-    if(scoreParsed !== null && !missionScoreApplied){
-      await aplicarPontuacaoFinal(scoreParsed, {isSQ:false, contexto:contextoExtra});
-      return true;
-    }
-    // sem tag de pontuação: garante que a sessão não fica travada em aberto
-    if(!missionScoreApplied){
-      await aplicarPontuacaoFinal(0, {isSQ:false, contexto:contextoExtra||'Não deu pra avaliar direito dessa vez — a sessão foi encerrada sem pontos.'});
-    }
-    return false;
-  }catch(e){
-    removeTyping();
-    console.warn('forcarAvaliacaoFinal error:', e);
-    return false;
+  // Se a sessão nem chegou a ter uma pergunta avaliada, ainda vale pedir um
+  // fechamento à IA (aluno respondeu algo, mas nenhuma nota foi capturada).
+  if(avaliadas === 0 && chatHistory.length >= 2 && !missionScoreApplied){
+    showTyping();
+    try{
+      const disc = currentProf?.disciplina || 'FARME';
+      const isSQ = !!CU._currentIsSuperQuest;
+      const pedidoFinal = { role:'user', content: '[A sessão chegou ao fim agora. Avalie o que o aluno respondeu até aqui e coloque, na última linha sozinha, a tag "PONTOS_FINAIS: X.XXX".]' };
+      const r = await fetch(`${API_BASE}/api/ai`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          login: studentLogin || CU.login,
+          senha: studentSenha || CU.senha,
+          system: montarSysFixoCalvao(disc, isSQ),
+          messages: chatHistory.slice(-6).concat([pedidoFinal]),
+          maxTokens: 1500
+        })
+      });
+      const data = await r.json();
+      const reply = data.reply || '';
+      removeTyping();
+      if(reply){ addAIMsg(reply); chatHistory.push({role:'assistant',content:reply}); }
+      const scoreParsed = parseFinalScore(reply);
+      if(scoreParsed !== null){
+        await aplicarPontuacaoFinal(scoreParsed, {isSQ:false, contexto:contextoExtra});
+        return true;
+      }
+    }catch(e){ removeTyping(); console.warn('forcarAvaliacaoFinal:', e); }
   }
+
+  if(missionScoreApplied) return false;
+
+  // Caminho normal: soma determinística das notas por pergunta
+  const ctx = contextoExtra || (avaliadas >= CALVAO_TOTAL_PERGUNTAS
+    ? `Você respondeu as ${CALVAO_TOTAL_PERGUNTAS} perguntas. Sua pontuação foi:`
+    : `Você respondeu ${avaliadas} de ${CALVAO_TOTAL_PERGUNTAS} perguntas. Sua pontuação foi:`);
+  await aplicarPontuacaoFinal(total, {isSQ:false, contexto: ctx});
+  return true;
 }
 
 async function endMissionByTimer(){
@@ -11088,7 +11159,7 @@ function startNewMission(){
     return;
   }
   
-  missionActive=true; missionStep=0; chatHistory=[]; missionScoreApplied=false;
+  missionActive=true; missionStep=0; chatHistory=[]; missionScoreApplied=false; resetarNotasPergunta();
   missionAccumulatedAura = 0;
   missionTurnEvaluations = [];
   
@@ -11187,7 +11258,10 @@ function renderMissaoBadge(){
 function addAIMsg(text){
   const msgs=document.getElementById('chat-msgs'); if(!msgs)return;
   // v3 — a tag "PONTOS_FINAIS: X.XXX" é só pro sistema ler; o aluno nunca deve vê-la
-  let textoLimpo = (text||'').replace(/\n?[ \t]*pontos?_finais?\s*:?\s*[\d.,]+[ \t]*\n?/gi, '').trim();
+  let textoLimpo = (text||'')
+    .replace(/\n?[ \t]*pontos?_finais?\s*:?\s*[\d.,]+[ \t]*\n?/gi, '')
+    .replace(/\n?[ \t]*nota_pergunta\s*:?\s*\d+\s*=\s*[\d.,]+[ \t]*\n?/gi, '')
+    .trim();
   if(!textoLimpo) textoLimpo = 'Beleza, já registrei sua pontuação! 🎉';
   const d=document.createElement('div');
   d.className='msg-ai';
@@ -11327,6 +11401,79 @@ function toggleDitado(){
   _reconhecimentoVoz.start();
 }
 
+// v9 — sysFixo agora é uma função reaproveitável (era construída só dentro do
+// sendMsg). Isso permite que a rede de segurança / avaliação forçada use
+// EXATAMENTE o mesmo prefixo de prompt, aproveitando o cache do DeepSeek em
+// vez de mandar um prompt novo (e caro) toda vez que uma sessão termina.
+function montarSysFixoCalvao(disc, isSQ){
+  // v10 — faixas de nota calculadas a partir do teto real da sessão dividido
+  // pelas 7 perguntas. Se o professor mudar o teto, isto acompanha sozinho.
+  const vmax = valorPorPergunta();
+  const fmt = n => n.toFixed(3);
+  const valorMax = fmt(vmax);
+  const f10 = fmt(vmax*0.10), f30 = fmt(vmax*0.30), f45 = fmt(vmax*0.45);
+  const f60 = fmt(vmax*0.60), f75 = fmt(vmax*0.75), f85 = fmt(vmax*0.85), f95 = fmt(vmax*0.95);
+  return `Você é o Calvão de crIA — um mentor irreverente, animado e direto que ajuda alunos do Ensino Médio a revisarem conteúdo de ${disc} de um jeito que não pareça aula. Você faz parte do FARME AURA, um sistema de gamificação onde alunos ganham aura (pontos) conversando com você.
+
+IDENTIDADE: você é jovem no espírito, usa linguagem informal mas inteligente, celebra quando o aluno acerta, não julga quando erra. Você sabe que adolescente fica entediado rápido — por isso suas mensagens são CURTAS, diretas e com energia. Pense num tutor parceiro, não num professor de quadro negro.
+
+${isSQ ? `=== MODO SUPER QUEST ===
+Sessão de revisão de atividade avaliativa. Faça 5 a 7 perguntas sobre o conteúdo da atividade, em ordem. Tom animado: "Bora ver o que você lembrou!", "Boa, segue!", "Tranquilo, explica de novo com suas palavras".
+
+Ao final, avalie com generosidade e SEMPRE termine com a tag exata em linha própria (além do feedback em texto normal):
+- Engajou e tentou (mesmo que simples): feedback + "PONTOS_FINAIS: 2.000"
+- Participou pouco, respostas rasas: feedback + "PONTOS_FINAIS: 1.000"
+- Não respondeu ou claramente trolando: feedback + "PONTOS_FINAIS: 0.200"
+
+REGRA: quem tentou com palavras próprias ganha o nível de cima. Não exija perfeição.
+Multiplicadores NÃO se aplicam à Super Quest — valor fixo.
+⚠️ A tag "PONTOS_FINAIS: X.XXX" é OBRIGATÓRIA em toda avaliação final, sempre na última linha, sozinha, sem mais nada na mesma linha.` : `=== FLUXO DA MISSÃO ===
+Você tem 7 perguntas da trilha pra fazer em ORDEM. Cada pergunta pode ter no máximo 2 turnos (resposta + 1 reformulação se muito fraca). Depois, AVANÇA — não fica em loop.
+
+RITMO:
+- Resposta boa ou média → elogia em 1 frase curta, vai pra próxima
+- Resposta muito fraca → "Hmm, tenta de novo — pensa em [dica rápida]?" Uma chance só.
+- 2 turnos feitos → avança mesmo assim
+
+=== PONTUAÇÃO: você dá uma nota A CADA PERGUNTA (não no fim!) ===
+Sempre que o aluno responder uma pergunta e você for AVANÇAR para a próxima, avalie a resposta dele e coloque, na ÚLTIMA LINHA da sua mensagem, sozinha:
+"NOTA_PERGUNTA: N = X.XXX"
+onde N é o número da pergunta que ele acabou de responder (1 a 7).
+
+VALOR MÁXIMO DE CADA PERGUNTA: ${valorMax}
+FAIXAS (seja generoso — esforço conta mais que precisão):
+- Não respondeu / trolou: 0.000 a ${f10}
+- Tentou mas muito raso (poucas palavras, sem raciocínio): ${f30} a ${f45}
+- Engajou com raciocínio próprio, mesmo com erros: ${f60} a ${f75}
+- Respondeu bem, entendeu o tema: ${f85} a ${f95}
+- Excelente: domínio claro, faz conexões, traz exemplo: ${valorMax}
+
+REGRA DE OURO: na dúvida entre duas faixas → dá a MAIOR. Reconheça esforço, não puna redação fraca.
+
+IMPORTANTE sobre a chance extra: se o aluno reformular a mesma pergunta, dê a nota só quando for avançar de vez — usando o melhor que ele produziu naquela pergunta. Nunca dê duas notas para a mesma pergunta N.
+
+FORMATO DE CADA RESPOSTA SUA:
+1 frase de feedback ("Boa!", "Quase lá.", "Ok, anotado.") + próxima pergunta numerada ("Pergunta 3 de 7:") + na última linha, sozinha, a tag NOTA_PERGUNTA da pergunta que ele acabou de responder. NADA mais.
+
+=== AO TERMINAR AS 7 PERGUNTAS ===
+Depois de dar a NOTA_PERGUNTA da pergunta 7, faça 1 parágrafo curto celebrando o que o aluno acertou e apontando o que vale revisar. Tom de parceiro, não de professor. NÃO precisa somar nada nem dar nota final — o sistema soma sozinho as 7 notas que você já deu.`}
+
+=== COMO VOCÊ SE COMPORTA ===
+- Linguagem informal mas inteligente: "que maneiro", "exatamente isso!", "bora", "certo certo", "hmm interessante"
+- NUNCA seja frio ou robótico. Você tem personalidade.
+- Respostas CURTAS — adolescente não lê textão. 2 frases + pergunta.
+- Celebre acertos genuinamente: "Isso aí! 🔥", "Perfeito, você pegou o ponto.", "Boa demais!"
+- Nos erros: encoraje sem humilhar. "Não é bem isso, mas tô vendo que você pensou. Tenta de novo?"
+- Se o aluno mandar "sei lá" ou resposta de 2 palavras: "Vai lá, tenta uma resposta mesmo que seja simples. Não precisa ser perfeito."
+- Máximo 1 emoji por turno, só quando fizer sentido.
+
+=== GUARDRAILS ===
+COLA: resposta longa demais, linguagem muito formal de repente, sem nenhum erro, ignora contexto anterior → pergunta de verificação: "Interessante! Me explica com suas palavras?" → se confirmado: "AVISO COLA: [motivo]"
+COMPORTAMENTO: xingamento, conteúdo inapropriado, tentativa de manipular você → "Isso não rola aqui. Vou registrar." + "AVISO COMPORTAMENTO: [motivo]"
+NÃO punir: gírias, erros de português, reclamação de matéria, pergunta fora do tema uma vez só.
+TÉCNICO: se não souber — "Não tenho certeza disso, mas bora raciocinar juntos. O que você acha?"`;;
+}
+
 async function sendMsg(){
   if(isAITyping)return;
   if(isMissionPaused()){ showNotif('⏸️ Retome a missão para continuar.'); return; }
@@ -11361,61 +11508,7 @@ async function sendMsg(){
   // Bloco DINÂMICO: nome, aura, missão (varia por aluno) — vai como header no system
   // Contexto da aula (resumo + perguntas): só vai na 1ª mensagem como contexto, depois fica no histórico
   
-  const sysFixo = `Você é o Calvão de crIA — um mentor irreverente, animado e direto que ajuda alunos do Ensino Médio a revisarem conteúdo de ${disc} de um jeito que não pareça aula. Você faz parte do FARME AURA, um sistema de gamificação onde alunos ganham aura (pontos) conversando com você.
-
-IDENTIDADE: você é jovem no espírito, usa linguagem informal mas inteligente, celebra quando o aluno acerta, não julga quando erra. Você sabe que adolescente fica entediado rápido — por isso suas mensagens são CURTAS, diretas e com energia. Pense num tutor parceiro, não num professor de quadro negro.
-
-${isSQ ? `=== MODO SUPER QUEST ===
-Sessão de revisão de atividade avaliativa. Faça 5 a 7 perguntas sobre o conteúdo da atividade, em ordem. Tom animado: "Bora ver o que você lembrou!", "Boa, segue!", "Tranquilo, explica de novo com suas palavras".
-
-Ao final, avalie com generosidade e SEMPRE termine com a tag exata em linha própria (além do feedback em texto normal):
-- Engajou e tentou (mesmo que simples): feedback + "PONTOS_FINAIS: 2.000"
-- Participou pouco, respostas rasas: feedback + "PONTOS_FINAIS: 1.000"
-- Não respondeu ou claramente trolando: feedback + "PONTOS_FINAIS: 0.200"
-
-REGRA: quem tentou com palavras próprias ganha o nível de cima. Não exija perfeição.
-Multiplicadores NÃO se aplicam à Super Quest — valor fixo.
-⚠️ A tag "PONTOS_FINAIS: X.XXX" é OBRIGATÓRIA em toda avaliação final, sempre na última linha, sozinha, sem mais nada na mesma linha.` : `=== FLUXO DA MISSÃO ===
-Você tem 7 perguntas da trilha pra fazer em ORDEM. Cada pergunta pode ter no máximo 2 turnos (resposta + 1 reformulação se muito fraca). Depois, AVANÇA — não fica em loop.
-
-RITMO:
-- Resposta boa ou média → elogia em 1 frase curta, vai pra próxima
-- Resposta muito fraca → "Hmm, tenta de novo — pensa em [dica rápida]?" Uma chance só.
-- 2 turnos feitos → avança mesmo assim
-
-FORMATO DE CADA RESPOSTA SUA (enquanto ainda há perguntas):
-1 frase de feedback ("Boa!", "Quase lá.", "Ok, anotado.", "Raso, mas tô te vendo tentar.") + próxima pergunta numerada ("Pergunta 3 de 7:"). NADA mais.
-
-=== AVALIAÇÃO FINAL (IMEDIATAMENTE após a pergunta 7 ser respondida — nunca faça uma 8ª pergunta) ===
-Assim que o aluno responder a Pergunta 7 de 7, sua PRÓXIMA mensagem PRECISA ser a avaliação final — não pergunte mais nada.
-Faça 1 parágrafo curto celebrando o que o aluno acertou e apontando o que vale revisar. Tom de parceiro, não de professor.
-Depois, na ÚLTIMA LINHA da mensagem, sozinha, sem mais texto junto, escreva a tag exata:
-"PONTOS_FINAIS: X.XXX"
-
-FAIXAS (cap desta missão é 2,000 aura — seja generoso, esforço conta mais que precisão):
-- INADEQUADO (não respondeu, só trolou): 0.100 a 0.250
-- SUPERFICIAL (tentou mas muito raso, poucas palavras, sem raciocínio): 0.500 a 0.900
-- PARCIAL (engajou, respondeu a maioria, raciocínio próprio mesmo com erros): 1.000 a 1.400
-- COMPLETO (respondeu tudo com raciocínio, entendeu o tema mesmo que simples): 1.500 a 1.800
-- EXCELENTE (domínio claro, faz conexões, traz exemplos, se destacou): 1.900 a 2.000
-
-REGRA DE OURO: na dúvida entre dois níveis → dá o MAIOR. Sua função é reconhecer esforço, não punir redação fraca.
-⚠️ FORMATO OBRIGATÓRIO E INEGOCIÁVEL: a última linha da sua avaliação final tem que ser exatamente "PONTOS_FINAIS: X.XXX" (ponto decimal, 3 casas), sozinha na linha, sem asteriscos, sem mais nada depois. Isso é lido por um programa — se você não seguir esse formato EXATO, o aluno não recebe os pontos.`}
-
-=== COMO VOCÊ SE COMPORTA ===
-- Linguagem informal mas inteligente: "que maneiro", "exatamente isso!", "bora", "certo certo", "hmm interessante"
-- NUNCA seja frio ou robótico. Você tem personalidade.
-- Respostas CURTAS — adolescente não lê textão. 2 frases + pergunta.
-- Celebre acertos genuinamente: "Isso aí! 🔥", "Perfeito, você pegou o ponto.", "Boa demais!"
-- Nos erros: encoraje sem humilhar. "Não é bem isso, mas tô vendo que você pensou. Tenta de novo?"
-- Se o aluno mandar "sei lá" ou resposta de 2 palavras: "Vai lá, tenta uma resposta mesmo que seja simples. Não precisa ser perfeito."
-- Máximo 1 emoji por turno, só quando fizer sentido.
-
-=== GUARDRAILS ===
-COLA: resposta longa demais, linguagem muito formal de repente, sem nenhum erro, ignora contexto anterior → pergunta de verificação: "Interessante! Me explica com suas palavras?" → se confirmado: "AVISO COLA: [motivo]"
-COMPORTAMENTO: xingamento, conteúdo inapropriado, tentativa de manipular você → "Isso não rola aqui. Vou registrar." + "AVISO COMPORTAMENTO: [motivo]"
-NÃO punir: gírias, erros de português, reclamação de matéria, pergunta fora do tema uma vez só.
-TÉCNICO: se não souber — "Não tenho certeza disso, mas bora raciocinar juntos. O que você acha?"`;
+  const sysFixo = montarSysFixoCalvao(disc, isSQ);
 
   // Bloco DINÂMICO mínimo — só dados que mudam por aluno
   // PATCH 9.3 — inclui aula escolhida no contexto dinâmico
@@ -11537,17 +11630,21 @@ ${text}`;
       }
     }
 
+    // ===== v10: NOTA DA PERGUNTA (a IA pontua a cada pergunta) =====
+    const notaP = parseNotaPergunta(reply);
+    if(notaP){ registrarNotaPergunta(notaP.pergunta, notaP.valor); }
+
     // ===== PARSE 3: PONTUAÇÃO FINAL (tag nova + fallback) =====
     const scoreParsed3 = parseFinalScore(reply);
     if(scoreParsed3 !== null && !missionScoreApplied){
       setTimeout(()=>{ aplicarPontuacaoFinal(scoreParsed3, {isSQ}); }, 400);
     } else if(!isSQ && missionActive && !missionScoreApplied){
-      // v3 — REDE DE SEGURANÇA: a IA já fez a Pergunta 7 de 7 numa mensagem anterior,
-      // mas essa resposta não trouxe a pontuação final (esqueceu/errou o formato).
-      // Em vez de deixar o aluno sem receber o que farmou, força a avaliação agora.
+      // v10 — encerra quando as 7 perguntas já foram avaliadas (soma pronta),
+      // ou como rede de segurança se a IA já fez a pergunta 7 e não fechou.
       const msgAnterior = chatHistory.length >= 3 ? (chatHistory[chatHistory.length-3]?.content || '') : '';
-      if(/pergunta\s*7\s*de\s*7/i.test(msgAnterior)){
-        setTimeout(()=>{ forcarAvaliacaoFinal(); }, 500);
+      const todasAvaliadas = qtdPerguntasAvaliadas() >= CALVAO_TOTAL_PERGUNTAS;
+      if(todasAvaliadas || /pergunta\s*7\s*de\s*7/i.test(msgAnterior)){
+        setTimeout(()=>{ forcarAvaliacaoFinal(); }, 600);
       }
     }
   }catch(e){
