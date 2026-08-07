@@ -2152,6 +2152,14 @@ function getCalvaoRemainingThisWeek(aluno){
 function addCalvaoEarned(aluno, pts){
   initHearts(aluno);
   aluno.weeklyCalvaoEarned = (aluno.weeklyCalvaoEarned || 0) + pts;
+  // v7 — persiste IMEDIATAMENTE. Antes, só era gravado ao encerrar a sessão;
+  // se o aluno fechasse a aba no meio, o gasto sumia e ele farmava de novo.
+  if(aluno === CU && typeof persistirProgressoAluno === 'function'){
+    persistirProgressoAluno({
+      weeklyCalvaoEarned: aluno.weeklyCalvaoEarned,
+      calvaoSemanaRef: aluno.calvaoSemanaRef || null
+    });
+  }
 }
 
 function hasSuperQuest(turma){
@@ -4088,6 +4096,34 @@ async function sairDaEscola(){
   }catch(e){ showNotif('❌ '+e.message); }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// v7 — PERSISTÊNCIA UNIFICADA DO PROGRESSO DO ALUNO
+// Corrige a classe de bug em que uns pontos do código salvavam na tabela
+// geral (`alunos`) e outros liam da tabela por disciplina (`aluno_progresso`),
+// fazendo o limite semanal e as aulas usadas "voltarem" a cada login.
+// Agora TODO progresso passa por aqui e vai para o lugar certo.
+// ══════════════════════════════════════════════════════════════════
+async function persistirProgressoAluno(campos){
+  if(CR!=='aluno' || !CU) return;
+  const login = studentLogin||CU.login, senha = studentSenha||CU.senha;
+  try{
+    if(ALUNO_DISC_ATIVA){
+      await fetch(`${API_BASE}/api/student?action=progresso`,{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({login, senha, disciplinaId: ALUNO_DISC_ATIVA, patch: campos})
+      });
+      // mantém a cópia em memória alinhada, para trocar de disciplina sem perder nada
+      const d = alunoDiscs().find(x=>x.id===ALUNO_DISC_ATIVA);
+      if(d){ d.progresso = Object.assign({}, d.progresso||{}, campos); }
+    } else {
+      await fetch(`${API_BASE}/api/student?action=update`,{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({login, senha, patch: campos})
+      });
+    }
+  }catch(e){ console.warn('persistirProgressoAluno:', e); }
+}
+
 // v4 — estado das disciplinas do professor (carregado do servidor)
 let PROF_DISCIPLINAS = [], PROF_VINCULOS = [], PROF_ESCOLA = null;
 
@@ -5770,8 +5806,9 @@ async function feConfirmarEnvio(){
   try {
     await fetch(`${API_BASE}/api/student?action=update`,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ login:studentLogin||CU.login, senha:studentSenha||CU.senha, patch:{ aura: CU.aura, atividadesPontos: CU.atividadesPontos } })
+      body: JSON.stringify({ login:studentLogin||CU.login, senha:studentSenha||CU.senha, patch:{ aura: CU.aura } })
     });
+    await persistirProgressoAluno({ atividadesPontos: CU.atividadesPontos });
   } catch(e){ console.warn('fe debit', e); }
   // 2) deposita o envelope em turma.feEnvelopes (caixa separada — não polui messagesProf)
   const t = DB.turmas.find(x=>x.id===CTid);
@@ -10161,16 +10198,7 @@ async function confirmStartMission(numAula){
     // mantém os últimos 200 registros
     if(CU.farmHistorico.length > 200) CU.farmHistorico = CU.farmHistorico.slice(-200);
     // Persiste no servidor AGORA
-    try {
-      await fetch(`${API_BASE}/api/student?action=update`,{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          login: studentLogin||CU.login,
-          senha: studentSenha||CU.senha,
-          patch: { aulasUsadas: CU.aulasUsadas, farmHistorico: CU.farmHistorico }
-        })
-      });
-    } catch(e){ console.warn('persist aulaUsada:', e); }
+    await persistirProgressoAluno({ aulasUsadas: CU.aulasUsadas, farmHistorico: CU.farmHistorico });
   } else {
     CU._aulaAtual = null;
   }
@@ -10416,12 +10444,9 @@ function fecharAtividade(){
       try {
         await fetch(`${API_BASE}/api/student?action=update`,{
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            login: studentLogin||CU.login,
-            senha: studentSenha||CU.senha,
-            patch: { aura: CU.aura, atividadesPontos: CU.atividadesPontos }
-          })
+          body: JSON.stringify({ login: studentLogin||CU.login, senha: studentSenha||CU.senha, patch: { aura: CU.aura } })
         });
+        await persistirProgressoAluno({ atividadesPontos: CU.atividadesPontos });
       } catch(err){ console.warn('persist atividade:', err); }
 
       showNotif(`🎮 +${fmtAura(auraGanha)} aura! (${pontosValidos} pontos)`);
@@ -10611,30 +10636,14 @@ async function saveActiveMission(){
   // Salva no Supabase a missão em andamento
   if(!CU.activeMission) return;
   try{
-    await fetch(`${API_BASE}/api/student?action=update`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        login:studentLogin||CU.login,
-        senha:studentSenha||CU.senha,
-        patch:{activeMission: CU.activeMission}
-      })
-    });
+    await persistirProgressoAluno({ activeMission: CU.activeMission });
   }catch(e){console.warn('mission save error:',e);}
 }
 
 async function clearActiveMission(){
   CU.activeMission = null;
   try{
-    await fetch(`${API_BASE}/api/student?action=update`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        login:studentLogin||CU.login,
-        senha:studentSenha||CU.senha,
-        patch:{activeMission: null}
-      })
-    });
+    await persistirProgressoAluno({ activeMission: null });
   }catch(e){console.warn(e);}
 }
 
@@ -10754,9 +10763,18 @@ function startMissionTimer(){
   // Atualiza UI a cada segundo
   missionTimerInterval = setInterval(()=>{
     updateMissionTimerUI();
+    // v7 — pausa longa demais encerra a sessão (evita deixar pausado o dia todo)
+    if(missionPausedAt && (Date.now()-missionPausedAt) > PAUSE_MAX_MS && !missionEndedByTimer){
+      missionEndedByTimer = true;
+      showNotif('⏸️ Missão encerrada: ficou mais de 10 minutos em pausa.');
+      limparEstadoMissao();
+      endMissionByTimer();
+      return;
+    }
     const remaining = getMissionRemainingMs();
     if(remaining <= 0 && !missionEndedByTimer){
       missionEndedByTimer = true;
+      limparEstadoMissao();
       endMissionByTimer();
     }
   }, 1000);
@@ -10770,9 +10788,30 @@ function stopMissionTimer(){
   }
 }
 
+const PAUSE_MAX_MS = 10*60*1000; // 10 minutos: depois disso a sessão encerra
+
+function salvarEstadoMissao(){
+  if(CR!=='aluno' || !CU) return;
+  try{
+    const st = missionActive ? {
+      ativa:true, startedAt:missionStartedAt, pausedAt:missionPausedAt,
+      totalPaused:missionTotalPausedMs, step:missionStep, aula:CU._aulaAtual||null,
+      acumulado:missionAccumulatedAura||0, hist:(chatHistory||[]).slice(-12)
+    } : null;
+    localStorage.setItem('farme_missao_estado', JSON.stringify(st));
+  }catch(e){}
+}
+function lerEstadoMissao(){
+  try{ return JSON.parse(localStorage.getItem('farme_missao_estado')||'null'); }catch(e){ return null; }
+}
+function limparEstadoMissao(){
+  try{ localStorage.removeItem('farme_missao_estado'); }catch(e){}
+}
+
 function pauseMissionTimer(){
   if(!missionStartedAt || missionPausedAt) return;
   missionPausedAt = Date.now();
+  salvarEstadoMissao();
   // Bloqueia input se estiver na aba do chat
   const input = document.getElementById('chat-in');
   const btn = document.getElementById('send-btn');
@@ -10786,6 +10825,7 @@ function resumeMissionTimer(){
   if(!missionPausedAt) return;
   missionTotalPausedMs += (Date.now() - missionPausedAt);
   missionPausedAt = null;
+  salvarEstadoMissao();
   // Libera input se estiver na aba do chat
   const input = document.getElementById('chat-in');
   const btn = document.getElementById('send-btn');
@@ -10960,6 +11000,7 @@ async function endMissionVoluntarily(){
 }
 
 async function finalizeMission(byTimer){
+  if(typeof limparEstadoMissao==='function') limparEstadoMissao();
   // Consome o coração reservado (se houver)
   if(CU.activeMission && CU.activeMission.heartReserved){
     // Coração já foi reservado em consumeHeart no startNewMission
@@ -11011,23 +11052,15 @@ async function finalizeMission(byTimer){
       await salvarProgressoDisciplina(); // grava weeklyCalvaoEarned/superQuestUsed/etc na disciplina certa
     } else {
       // compatibilidade: aluno ainda sem disciplinas migradas
-      await fetch(`${API_BASE}/api/student?action=update`,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          login:studentLogin||CU.login,
-          senha:studentSenha||CU.senha,
-          patch:{
-            missoes:CU.missoes,
-            weeklyCalvaoEarned:CU.weeklyCalvaoEarned,
-            superQuestUsed:CU.superQuestUsed,
-            nextMissionBoost:CU.nextMissionBoost,
-            dobradorRemaining:CU.dobradorRemaining,
-            activeMission:null,
-            calvaoBloqueadoUntil:CU.calvaoBloqueadoUntil||null,
-            iaWarnings:CU.iaWarnings||[],
-            farmHistorico:CU.farmHistorico||[]
-          }
-        })
+      await persistirProgressoAluno({
+        missoes:CU.missoes,
+        weeklyCalvaoEarned:CU.weeklyCalvaoEarned,
+        calvaoSemanaRef:CU.calvaoSemanaRef||null,
+        superQuestUsed:CU.superQuestUsed,
+        activeMission:null,
+        calvaoBloqueadoUntil:CU.calvaoBloqueadoUntil||null,
+        iaWarnings:CU.iaWarnings||[],
+        farmHistorico:CU.farmHistorico||[]
       });
     }
   }catch(e){console.warn('finalizeMission save error:',e);}
@@ -11126,21 +11159,12 @@ function startNewMission(){
   // PATCH 9.2 — Persistir IMEDIATAMENTE o coração consumido + missão ativa
   // (antes só persistia no fim da missão; se o aluno deslogava, perdia o consumo)
   try {
-    fetch(`${API_BASE}/api/student?action=update`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        login:studentLogin||CU.login,
-        senha:studentSenha||CU.senha,
-        patch:{
-          hearts: CU.hearts,
-          heartWeek: CU.heartWeek,
-          weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
-          calvaoSemanaRef: CU.calvaoSemanaRef||null,
-          superQuestUsed: CU.superQuestUsed||0,
-          activeMission: CU.activeMission
-        }
-      })
-    }).catch(()=>{});
+    persistirProgressoAluno({
+      weeklyCalvaoEarned: CU.weeklyCalvaoEarned||0,
+      calvaoSemanaRef: CU.calvaoSemanaRef||null,
+      superQuestUsed: CU.superQuestUsed||0,
+      activeMission: CU.activeMission
+    });
   } catch(e){ console.warn('persist heart consume:', e); }
 
   addAIMsg(intro);
