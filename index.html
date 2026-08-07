@@ -14684,11 +14684,18 @@ window.FW_open=async function(){
   }
 
   // monta o mundo (usa dados do servidor se disponíveis; senão lista fixa/demo)
+  // v8 — CORREÇÃO DE PERFORMANCE: antes, montar o mundo + desenhar a vila +
+  // renderizar o HUD rodava tudo em sequência síncrona, travando a tela até
+  // terminar (perceptível em celulares antigos). Agora damos um respiro ao
+  // navegador entre cada etapa, para ele conseguir pintar a tela no meio do processo.
+  await new Promise(r=>requestAnimationFrame(r));
   try{
     await fwBuildMundo();
   }catch(e){ console.error('fwBuildMundo erro',e); }
+  await new Promise(r=>requestAnimationFrame(r));
   fwRenderHUD();
   fwTab('recursos',document.querySelector('#fw-vside .fw-vsi'));
+  await new Promise(r=>requestAnimationFrame(r));
   fwDrawVila();
   if(!window._fwTick){window._fwTick=setInterval(fwTick,15000);}
   fwNotif(FW_ONLINE ? ('🌍 Online — '+FW_NAC.length+' nações no mundo!') : ('🌍 Mundo carregado — '+FW_NAC.length+' nação(ões)!'));
@@ -15703,9 +15710,16 @@ function fvDrawParticles(ts){
     fwVX.fill();
   }
 }
+let fvUltimoFrame=0;
+const FV_FRAME_MS=66; // ~15fps — suficiente para partículas ambiente, muito mais leve que 60fps
 function fvLoop(ts){
   const root=document.getElementById('fw-root'),vv=document.getElementById('fw-vila');
   if(!root||!root.classList.contains('open')||!vv||!vv.classList.contains('active')){requestAnimationFrame(fvLoop);return;}
+  // v8 — CORREÇÃO DE PERFORMANCE: antes redesenhava a vila inteira (chão+prédios)
+  // 60x por segundo o tempo todo. Isso travava celulares antigos e disputava o
+  // processador com qualquer outra interação (ex: abrir a barra de recursos).
+  if(ts-fvUltimoFrame < FV_FRAME_MS){ requestAnimationFrame(fvLoop); return; }
+  fvUltimoFrame=ts;
   fvNowTs=ts;
   fvSpawnAmbient(ts);
   fwDrawVila();
@@ -15854,8 +15868,13 @@ function fwPassF(j){
   if(FW.filter==='alpha')return j.tier==='alpha'||j.tier==='sigma';
   return true;
 }
+let fwUltimoFrame=0;
+const FW_FRAME_MS=50; // ~20fps — o Mundo tem mais elementos (jogadores/estrelas), um pouco mais fluido que a Vila
 function fwLoop(ts){
   if(!document.getElementById('fw-root').classList.contains('open')||!document.getElementById('fw-mapa').classList.contains('active')){requestAnimationFrame(fwLoop);return;}
+  // v8 — mesma correção de performance do loop da Vila
+  if(ts-fwUltimoFrame < FW_FRAME_MS){ requestAnimationFrame(fwLoop); return; }
+  fwUltimoFrame=ts;
   const dt=Math.min(.05,(ts-fwLastTs)/1000)||.016;fwLastTs=ts;
   fwSyncEventRoutes();
   const w=fwMC.width,h=fwMC.height;
