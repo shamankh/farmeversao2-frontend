@@ -2705,6 +2705,8 @@ async function doLoginAluno(){
       calvaoPacote: data.professor.calvaoPacote || {}  // PATCH 9.5 — pacote do mascote
     };
     
+    // v11 — o servidor ja diz no login se o FARME esta aberto agora
+    FARME_ACESSO = data.acesso || { aberta:true, porToken:false, minutosRestantes:0 };
     // PATCH 9.0 — Inicializa corações e captura reset pendente para registrar no log
     initHearts(CU);
     if(CU._pendingResetLog){
@@ -2986,7 +2988,11 @@ function aplicarDisciplinaAluno(discId){
   CU.superQuestUsed       = p.superQuestUsed||0;
   CU.calvaoBloqueadoUntil = p.calvaoBloqueadoUntil||null;
   CU.iaWarnings           = p.iaWarnings||[];
-  CU.aulasUsadas          = p.aulasUsadas||{};
+  // v11 — FUNDE em vez de sobrescrever. Antes, se a linha da disciplina
+  // ainda nao tivesse aulas_usadas (linha criada por um save parcial de
+  // "missao ativa", por exemplo), isto jogava {} por cima e as duas aulas
+  // do aluno voltavam a ficar disponiveis.
+  CU.aulasUsadas          = fundirAulasUsadas(p.aulasUsadas, CU.aulasUsadas);
   CU.farmHistorico        = p.farmHistorico||[];
   CU.atividadesPontos     = p.atividadesPontos||{};
   CU.chatLog              = p.chatLog||[];
@@ -3101,6 +3107,9 @@ function startApp(){
     document.getElementById('s-chip').style.display='flex';
     updateAuraTop();
     renderAlunoApp();
+    // v11 — vigia da janela de horario (checa a cada 60s)
+    iniciarVigiaJanela();
+    if(!farmeAberto()) setTimeout(mostrarBloqueioFarme, 400);
   } else { renderProfApp(); }
   
   // PATCH 9.0 — Verifica leilões expirados a cada 60 segundos
@@ -3202,6 +3211,10 @@ function renderProfApp(){
         <div class="tdot" style="background:var(--gold)"></div>
         <span style="font-size:12px">🎟️ Códigos Resgate</span>
       </div>
+      <div class="t-tab" onclick="openTokensFarme();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
+        <div class="tdot" style="background:var(--red2)"></div>
+        <span style="font-size:12px">🔓 Liberar FARME</span>
+      </div>
       <div class="t-tab" onclick="openExportar();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--green)"></div>
         <span style="font-size:12px">📊 Exportar Dados</span>
@@ -3271,7 +3284,12 @@ function renderProfHomeContent(){
     '</div>'+
     '</div>';
 
-  const cfgPanel=buildConfigPanel(slotInicio,slotFim,durPadrao,ivs);
+  // v11 — codigos de liberacao do dia, sempre a vista na pagina inicial
+  const tokensPanel = '<div id="prof-tokens-box" style="background:var(--bg2);border:1.5px solid rgba(229,62,62,.28);border-radius:var(--r2);padding:16px;margin-bottom:18px">'+
+    '<div style="font-size:12px;color:var(--muted)">Carregando codigos de liberacao...</div></div>';
+  setTimeout(()=>{ if(typeof carregarTokensHome==="function") carregarTokensHome(); }, 60);
+
+  const cfgPanel=tokensPanel+buildConfigPanel(slotInicio,slotFim,durPadrao,ivs);
 
   let gridSection='';
   if(!horarioConfigurado){
@@ -4170,25 +4188,270 @@ async function sairDaEscola(){
 // fazendo o limite semanal e as aulas usadas "voltarem" a cada login.
 // Agora TODO progresso passa por aqui e vai para o lugar certo.
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// v11 — JANELA DE HORARIO DO FARME
+//
+// Motivo: alunos estavam farmando durante outras aulas. Agora o FARME
+// fica fechado no horario de aula e so abre nos intervalos.
+//
+//   FECHADO:  07:30–11:55  e  12:55–16:30
+//   ABERTO:   00:00–07:30, 11:55–12:55 e 16:30–23:59
+//
+// IMPORTANTE: quem decide e o SERVIDOR (student.js). O que esta aqui e
+// so a parte visual. Se o aluno mexer no relogio do celular, nao muda
+// nada — o servidor continua barrando.
+//
+// Liberacao: o professor da sala pede um codigo de 4 numeros ao
+// administrador do FARME. O aluno digita e ganha 50 minutos.
+// ══════════════════════════════════════════════════════════════════
+let FARME_ACESSO = { aberta: true, porToken: false, minutosRestantes: 0 };
+let _janelaTimer = null;
+let _janelaChecando = false;
+
+function farmeAberto(){ return FARME_ACESSO && FARME_ACESSO.aberta !== false; }
+
+// Pergunta ao servidor se o FARME esta aberto para este aluno agora.
+async function checarJanelaFarme(silencioso){
+  if(CR !== 'aluno' || !CU || _janelaChecando) return FARME_ACESSO;
+  _janelaChecando = true;
+  try{
+    const r = await fetch(`${API_BASE}/api/student?action=janela`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({login: studentLogin||CU.login, senha: studentSenha||CU.senha})
+    });
+    const d = await r.json().catch(()=>({}));
+    if(r.ok && d.acesso){
+      const estavaAberto = farmeAberto();
+      FARME_ACESSO = d.acesso;
+      if(d.auraReal != null && auraPodeSincronizar()){
+        CU.aura = d.auraReal;
+        if(typeof updateAuraTop === 'function') updateAuraTop();
+      }
+      // Fechou no meio do uso: encerra o que estiver rolando e avisa.
+      if(estavaAberto && !farmeAberto() && !silencioso){
+        if(typeof missionActive !== 'undefined' && missionActive){
+          try{ if(typeof endMission === 'function') await endMission(); }catch(e){}
+        }
+        mostrarBloqueioFarme();
+      }
+      // Token acabou de expirar
+      if(!farmeAberto()) atualizarAvisoJanela();
+    }
+  }catch(e){ /* offline: nao trava o aluno por falha de rede */ }
+  finally{ _janelaChecando = false; }
+  return FARME_ACESSO;
+}
+
+function iniciarVigiaJanela(){
+  if(_janelaTimer) clearInterval(_janelaTimer);
+  if(CR !== 'aluno') return;
+  // checa a cada 60s; e tambem sempre que a aba volta ao foco
+  _janelaTimer = setInterval(()=>checarJanelaFarme(false), 60000);
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && CR === 'aluno') checarJanelaFarme(false);
+});
+
+// Faixa de aviso no topo do painel do aluno.
+function avisoJanelaHtml(){
+  if(CR !== 'aluno') return '';
+  if(FARME_ACESSO && FARME_ACESSO.porToken){
+    const min = FARME_ACESSO.minutosRestantes || 0;
+    return `<div id="farme-aviso-janela" style="padding:8px 14px;background:rgba(63,184,158,.12);border-bottom:1px solid rgba(63,184,158,.35);font-size:12px;color:#3fb89e;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:700">🔓 Liberado pelo professor</span>
+      <span style="color:var(--muted2)">${min} min restantes</span>
+    </div>`;
+  }
+  if(!farmeAberto()){
+    return `<div id="farme-aviso-janela" style="padding:8px 14px;background:rgba(229,62,62,.12);border-bottom:1px solid rgba(229,62,62,.35);font-size:12px;color:var(--red2);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:700">🔒 FARME fechado</span>
+      <span style="color:var(--muted2)">Abre as ${FARME_ACESSO.abreAs||'--:--'}</span>
+      <button onclick="abrirModalToken()" style="margin-left:auto;background:transparent;border:1px solid rgba(229,62,62,.5);color:var(--red2);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;cursor:pointer">Tenho um codigo</button>
+    </div>`;
+  }
+  if(FARME_ACESSO && FARME_ACESSO.fechaAs){
+    return `<div id="farme-aviso-janela" style="padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:11px;color:var(--muted2)">
+      ⏰ O FARME fecha as ${FARME_ACESSO.fechaAs}
+    </div>`;
+  }
+  return '';
+}
+
+function atualizarAvisoJanela(){
+  const el = document.getElementById('farme-aviso-janela');
+  if(!el) { if(typeof renderAlunoApp === 'function' && CR==='aluno') renderAlunoApp(); return; }
+  const novo = document.createElement('div');
+  novo.innerHTML = avisoJanelaHtml();
+  if(novo.firstElementChild) el.replaceWith(novo.firstElementChild);
+  else el.remove();
+}
+
+// Tela cheia de bloqueio, com o campo do codigo de liberacao.
+function mostrarBloqueioFarme(){
+  document.getElementById('farme-bloqueio-ov')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'farme-bloqueio-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:11000;background:rgba(8,10,16,.92);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)';
+  ov.innerHTML = `
+    <div style="max-width:420px;width:100%;background:var(--bg2);border:1.5px solid rgba(229,62,62,.35);border-radius:var(--r2);padding:26px 22px;text-align:center">
+      <div style="font-size:44px;margin-bottom:8px">🔒</div>
+      <div style="font-family:'Orbitron',monospace;font-size:19px;font-weight:900;color:var(--red2);margin-bottom:6px">FARME FECHADO</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:16px">
+        Agora e horario de aula. O FARME volta a abrir as
+        <strong style="color:var(--gold)">${FARME_ACESSO.abreAs||'--:--'}</strong>.
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px;font-size:11.5px;color:var(--muted2);line-height:1.6;margin-bottom:18px;text-align:left">
+        <strong style="color:var(--text)">Horarios livres:</strong><br>
+        🍽️ 11:55 as 12:55 &nbsp;·&nbsp; 🏠 a partir das 16:30
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+        O professor liberou o computador? Digite o codigo de 4 numeros:
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px">
+        <input id="farme-token-input" inputmode="numeric" maxlength="4" placeholder="0000"
+          oninput="this.value=this.value.replace(/\D/g,'')"
+          onkeydown="if(event.key==='Enter')enviarTokenFarme()"
+          style="width:130px;text-align:center;letter-spacing:8px;font-family:'Orbitron',monospace;font-size:22px;font-weight:900;padding:10px;border-radius:var(--r);border:1.5px solid var(--border2);background:var(--bg3);color:var(--text)">
+        <button onclick="enviarTokenFarme()" id="farme-token-btn"
+          style="background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;padding:10px 18px;border-radius:var(--r);font-family:'Orbitron',monospace;font-weight:900;font-size:13px;cursor:pointer">LIBERAR</button>
+      </div>
+      <div id="farme-token-err" style="font-size:11.5px;color:var(--red2);min-height:16px;margin-bottom:12px"></div>
+      <button onclick="document.getElementById('farme-bloqueio-ov')?.remove()"
+        style="background:transparent;border:1px solid var(--border2);color:var(--muted);padding:7px 16px;border-radius:var(--r);font-size:12px;cursor:pointer">
+        Fechar
+      </button>
+    </div>`;
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('farme-token-input')?.focus(), 120);
+}
+
+function abrirModalToken(){ mostrarBloqueioFarme(); }
+
+async function enviarTokenFarme(){
+  const inp = document.getElementById('farme-token-input');
+  const err = document.getElementById('farme-token-err');
+  const btn = document.getElementById('farme-token-btn');
+  const codigo = (inp?.value||'').replace(/\D/g,'');
+  if(codigo.length !== 4){ if(err) err.textContent = 'O codigo tem 4 numeros.'; return; }
+  if(btn){ btn.disabled = true; btn.textContent = '...'; }
+  if(err) err.textContent = '';
+  try{
+    const r = await fetch(`${API_BASE}/api/student?action=token-usar`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({login: studentLogin||CU.login, senha: studentSenha||CU.senha, codigo})
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){
+      if(err) err.textContent = d.error || 'Codigo invalido.';
+      return;
+    }
+    FARME_ACESSO = d.acesso || { aberta:true, porToken:true, minutosRestantes: d.minutos||50 };
+    document.getElementById('farme-bloqueio-ov')?.remove();
+    showNotif(`🔓 Liberado por ${d.minutos||50} minutos! Bom farme.`);
+    if(typeof renderAlunoApp === 'function') renderAlunoApp();
+  }catch(e){
+    if(err) err.textContent = 'Falha de conexao. Tente de novo.';
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = 'LIBERAR'; }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// v11 — CONTROLE DE GRAVACOES PENDENTES DA AURA
+// Enquanto houver um save de aura viajando para o servidor, nenhuma
+// sincronizacao pode sobrescrever o valor local. Sem isso, um refresh
+// que saiu antes do save voltava com o numero velho e "roubava" a aura
+// que o aluno tinha acabado de ganhar (ou de gastar).
+// ══════════════════════════════════════════════════════════════════
+let _auraSavesPendentes = 0;
+let _auraUltimoSaveEm  = 0;
+
+function auraPodeSincronizar(){
+  if(_auraSavesPendentes > 0) return false;
+  // margem de 4s depois do ultimo save: da tempo do banco propagar
+  return (Date.now() - _auraUltimoSaveEm) > 4000;
+}
+
+function marcarAuraSuja(){ _auraSavesPendentes++; }
+function marcarAuraSalva(){
+  _auraSavesPendentes = Math.max(0, _auraSavesPendentes - 1);
+  _auraUltimoSaveEm = Date.now();
+}
+
+// v11 — POST com repeticao. O save da bagagem falhava calado (so um
+// console.warn) e o EGO sumia no proximo login. Agora tenta 3 vezes e,
+// se ainda assim falhar, o chamador fica sabendo.
+async function postAlunoComRetry(url, payload, tentativas){
+  const max = tentativas || 3;
+  let ultimoErro = null;
+  for(let i = 0; i < max; i++){
+    try{
+      const r = await fetch(url, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json().catch(()=>({}));
+      if(r.ok) return { ok:true, data };
+      // 409 = o servidor recusou a aura por estar fora de sincronia.
+      // Nao adianta repetir: precisa realinhar com o valor real.
+      if(r.status === 409 && data && data.auraReal != null){
+        CU.aura = data.auraReal;
+        if(typeof updateAuraTop === 'function') updateAuraTop();
+        return { ok:false, conflito:true, data };
+      }
+      ultimoErro = data.error || ('HTTP ' + r.status);
+    }catch(e){ ultimoErro = e.message; }
+    await new Promise(ok => setTimeout(ok, 400 * (i + 1)));
+  }
+  console.warn('postAlunoComRetry falhou:', ultimoErro);
+  return { ok:false, erro: ultimoErro };
+}
+
+// v11 — funde dois mapas de aulas usadas ficando sempre com o MAIOR
+// contador de cada aula. Progresso de aula nunca anda para tras.
+function fundirAulasUsadas(a, b){
+  const A = (a && typeof a === 'object') ? a : {};
+  const B = (b && typeof b === 'object') ? b : {};
+  const out = Object.assign({}, A);
+  for(const k in B){
+    const nv = parseInt(B[k],10) || 0;
+    const av = parseInt(A[k],10) || 0;
+    out[k] = Math.max(av, nv);
+  }
+  return out;
+}
+
 async function persistirProgressoAluno(campos){
   if(CR!=='aluno' || !CU) return;
   const login = studentLogin||CU.login, senha = studentSenha||CU.senha;
+  const mexeNaAura = campos && ('aura' in campos);
+  if(mexeNaAura) marcarAuraSuja();
   try{
     if(ALUNO_DISC_ATIVA){
-      await fetch(`${API_BASE}/api/student?action=progresso`,{
+      const r = await fetch(`${API_BASE}/api/student?action=progresso`,{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({login, senha, disciplinaId: ALUNO_DISC_ATIVA, patch: campos})
       });
+      // v11 — o servidor devolve o mapa de aulas ja fundido. Vale mais que
+      // o local: se outra aba tinha gasto uma aula, ela vem de volta aqui.
+      const d0 = await r.json().catch(()=>({}));
+      if(r.ok && d0 && d0.aulasUsadas){
+        CU.aulasUsadas = fundirAulasUsadas(CU.aulasUsadas, d0.aulasUsadas);
+        campos = Object.assign({}, campos, { aulasUsadas: CU.aulasUsadas });
+      }
       // mantém a cópia em memória alinhada, para trocar de disciplina sem perder nada
       const d = alunoDiscs().find(x=>x.id===ALUNO_DISC_ATIVA);
       if(d){ d.progresso = Object.assign({}, d.progresso||{}, campos); }
     } else {
-      await fetch(`${API_BASE}/api/student?action=update`,{
+      const r = await fetch(`${API_BASE}/api/student?action=update`,{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({login, senha, patch: campos})
       });
+      const d0 = await r.json().catch(()=>({}));
+      if(r.ok && d0 && d0.auraReal != null && mexeNaAura) CU.aura = d0.auraReal;
     }
   }catch(e){ console.warn('persistirProgressoAluno:', e); }
+  finally { if(mexeNaAura) marcarAuraSalva(); }
 }
 
 // v4 — estado das disciplinas do professor (carregado do servidor)
@@ -5759,7 +6022,12 @@ async function feRefreshSnapshot(){
       if(!currentProf) currentProf = {};
       currentProf.calvaoPacote = data.professor.calvaoPacote || currentProf.calvaoPacote || {};
       // Só sincroniza a aura se NÃO houver missão ativa (evita atropelar aura local recém-ganha)
-      if(data.aluno && data.aluno.aura != null && !CU.activeMission && !_feEnviando) CU.aura = data.aluno.aura;
+      // v11 — so aceita a aura do servidor se NAO houver gravacao local pendente.
+      // Antes, este refresh sobrescrevia a aura recem-ganha por um valor velho
+      // do banco — era isto que fazia o gacha dizer "aura insuficiente"
+      // mesmo com o aluno tendo aura na tela.
+      if(data.aluno && data.aluno.aura != null && !CU.activeMission
+         && !_feEnviando && auraPodeSincronizar()) CU.aura = data.aluno.aura;
       if(data.aluno && Array.isArray(data.aluno.messages)) CU.messages = data.aluno.messages;
     }
   } catch(e){ console.warn('feRefreshSnapshot', e); }
@@ -6291,6 +6559,173 @@ const EVENTOS_CATALOGO = [
 // ══════════════════════════════════════════════════════════════════
 let _codigosCache = null;
 const fmtCod = c => c.slice(0,4)+'-'+c.slice(4,8)+'-'+c.slice(8,10);
+
+// ══════════════════════════════════════════════════════════════════
+// v11 — PAINEL DE LIBERACAO DO FARME (professor)
+//
+// Todo dia o sistema ja deixa 3 codigos prontos. Se um colega professor
+// liberar o computador para a turma, ele pede um codigo ao administrador
+// do FARME e passa para os alunos. Cada aluno usa o codigo UMA vez e
+// ganha 50 minutos. Se precisar de mais codigos, e so gerar.
+// ══════════════════════════════════════════════════════════════════
+let TOKENS_HOJE = { dia:'', tokens:[], janela:null, minutos:50 };
+let _tokensCarregando = false;
+
+async function carregarTokensHome(){
+  if(CR !== 'professor' || _tokensCarregando) return;
+  _tokensCarregando = true;
+  try{
+    const d = await apiFetch('/api/db?action=tokens-hoje', {});
+    TOKENS_HOJE = d || TOKENS_HOJE;
+    pintarTokensHome();
+  }catch(e){
+    const box = document.getElementById('prof-tokens-box');
+    if(box) box.innerHTML = '<div style="font-size:12px;color:var(--muted)">🔓 Liberacao do FARME indisponivel. '+
+      '<button class="btn btn-sm" onclick="carregarTokensHome()" style="margin-left:6px">Tentar de novo</button></div>';
+    console.warn('carregarTokensHome:', e);
+  } finally { _tokensCarregando = false; }
+}
+
+function cardCodigo(t, grande){
+  const esgotado = !t.ativo;
+  const cor = esgotado ? 'var(--muted)' : 'var(--gold)';
+  const tam = grande ? '30px' : '24px';
+  return '<div style="flex:0 0 auto;background:var(--bg3);border:1.5px solid '+(esgotado?'var(--border)':'rgba(240,180,41,.4)')+
+    ';border-radius:var(--r);padding:10px 14px;text-align:center;min-width:104px;'+(esgotado?'opacity:.5':'')+'">'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:'+tam+';font-weight:900;letter-spacing:3px;color:'+cor+'">'+t.codigo+'</div>'+
+    '<div style="font-size:10px;color:var(--muted2);margin-top:3px">'+(t.usos||0)+' aluno(s) usaram</div>'+
+    (esgotado?'<div style="font-size:9.5px;color:var(--red2);margin-top:2px">revogado</div>':'')+
+    '</div>';
+}
+
+function pintarTokensHome(){
+  const box = document.getElementById('prof-tokens-box');
+  if(!box) return;
+  const ativos = (TOKENS_HOJE.tokens||[]).filter(t=>t.ativo);
+  const usos = (TOKENS_HOJE.tokens||[]).reduce((s,t)=>s+(t.usos||0),0);
+  box.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">'+
+      '<div>'+
+        '<div style="font-family:\'Orbitron\',monospace;font-size:14px;font-weight:900">🔓 Liberar FARME hoje</div>'+
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">'+
+          'Cada codigo libera '+(TOKENS_HOJE.minutos||50)+' min · 1 uso por aluno · '+usos+' liberacao(oes) hoje</div>'+
+      '</div>'+
+      '<div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button class="btn btn-sm" onclick="gerarMaisTokens(3)" style="border-color:rgba(240,180,41,.4);color:var(--gold)">+ Gerar mais 3</button>'+
+        '<button class="btn btn-sm" onclick="openTokensFarme()">Ver detalhes</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
+      (ativos.length ? ativos.map(t=>cardCodigo(t,true)).join('')
+        : '<div style="font-size:12px;color:var(--muted)">Nenhum codigo ativo. Clique em "Gerar mais 3".</div>')+
+    '</div>'+
+    '<div style="font-size:10.5px;color:var(--muted2);margin-top:10px;line-height:1.5">'+
+      '⏰ Fora dos horarios livres (11:55–12:55 e apos 16:30) o FARME fica fechado. '+
+      'Passe um destes codigos ao professor que estiver liberando o computador.</div>';
+}
+
+async function gerarMaisTokens(quantos){
+  try{
+    const d = await apiFetch('/api/db?action=tokens-gerar', { quantos: quantos||3 });
+    TOKENS_HOJE = Object.assign({}, TOKENS_HOJE, d);
+    pintarTokensHome();
+    if(document.getElementById('m-tokens-ov')) pintarModalTokens();
+    showNotif('🔓 '+(d.novos||0)+' codigo(s) gerado(s)!');
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+async function revogarToken(id){
+  if(!confirm('Desativar este codigo? Quem ja usou continua liberado, mas ninguem mais consegue usar.')) return;
+  try{
+    const d = await apiFetch('/api/db?action=tokens-revogar', { id });
+    TOKENS_HOJE = Object.assign({}, TOKENS_HOJE, d);
+    pintarTokensHome();
+    if(document.getElementById('m-tokens-ov')) pintarModalTokens();
+    showNotif('Codigo desativado.');
+  }catch(e){ showNotif('❌ '+e.message); }
+}
+
+function openTokensFarme(){
+  document.getElementById('m-tokens-ov')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'm-tokens-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:10500;background:rgba(8,10,16,.8);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto';
+  ov.onclick = e => { if(e.target===ov) ov.remove(); };
+  ov.innerHTML = '<div id="m-tokens-card" style="max-width:640px;width:100%;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:22px;max-height:88vh;overflow:auto"></div>';
+  document.body.appendChild(ov);
+  pintarModalTokens();
+  if(!(TOKENS_HOJE.tokens||[]).length) carregarTokensHome().then(pintarModalTokens);
+}
+
+function pintarModalTokens(){
+  const card = document.getElementById('m-tokens-card');
+  if(!card) return;
+  const js = TOKENS_HOJE.janela || {};
+  const bloqueios = Array.isArray(js.bloqueios) && js.bloqueios.length ? js.bloqueios
+    : [{de:'07:30',ate:'11:55'},{de:'12:55',ate:'16:30'}];
+  const janelaAtiva = js.ativo !== false;
+
+  card.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:17px;font-weight:900">🔓 Liberar FARME</div>'+
+      '<button onclick="document.getElementById(\'m-tokens-ov\').remove()" style="margin-left:auto;background:transparent;border:1px solid var(--border2);color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:15px">×</button>'+
+    '</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Codigos de '+(TOKENS_HOJE.dia||'hoje')+' · valem so hoje</div>'+
+
+    '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px">'+
+      '<div style="font-size:12px;font-weight:700;margin-bottom:8px">⏰ Quando o FARME fica FECHADO</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+        bloqueios.map(b=>'<span style="background:rgba(229,62,62,.12);border:1px solid rgba(229,62,62,.3);color:var(--red2);padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700">'+b.de+' – '+b.ate+'</span>').join('')+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--muted2);line-height:1.6">'+
+        'Nos demais horarios o FARME esta aberto normalmente.<br>'+
+        'Estado da trava: <strong style="color:'+(janelaAtiva?'var(--green2)':'var(--muted)')+'">'+(janelaAtiva?'LIGADA':'DESLIGADA')+'</strong>'+
+        ' <button class="btn btn-sm" onclick="alternarJanelaFarme('+(!janelaAtiva)+')" style="margin-left:8px">'+(janelaAtiva?'Desligar trava':'Ligar trava')+'</button>'+
+      '</div>'+
+    '</div>'+
+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+
+      '<div style="font-size:13px;font-weight:700">Codigos do dia</div>'+
+      '<button class="btn btn-sm" onclick="gerarMaisTokens(1)" style="margin-left:auto">+1</button>'+
+      '<button class="btn btn-sm" onclick="gerarMaisTokens(3)" style="border-color:rgba(240,180,41,.4);color:var(--gold)">+3</button>'+
+    '</div>'+
+
+    ((TOKENS_HOJE.tokens||[]).length
+      ? TOKENS_HOJE.tokens.map(t=>
+          '<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border:1px solid '+(t.ativo?'var(--border)':'rgba(229,62,62,.25)')+';border-radius:var(--r);padding:12px;margin-bottom:8px;flex-wrap:wrap">'+
+            '<div style="font-family:\'Orbitron\',monospace;font-size:26px;font-weight:900;letter-spacing:4px;color:'+(t.ativo?'var(--gold)':'var(--muted)')+'">'+t.codigo+'</div>'+
+            '<div style="flex:1;min-width:130px">'+
+              '<div style="font-size:12px;color:var(--muted2)">'+(t.usos||0)+' aluno(s) usaram · '+(t.minutos||50)+' min cada</div>'+
+              (t.quemUsou && t.quemUsou.length
+                ? '<div style="font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.45">'+t.quemUsou.slice(0,6).map(u=>u.nome).join(', ')+(t.usos>6?' +'+(t.usos-6)+' outros':'')+'</div>'
+                : '<div style="font-size:10.5px;color:var(--muted);margin-top:3px">ainda nao usado</div>')+
+            '</div>'+
+            (t.ativo
+              ? '<button class="btn btn-sm" onclick="revogarToken(\''+t.id+'\')" style="border-color:rgba(229,62,62,.35);color:var(--red2)">Desativar</button>'
+              : '<span style="font-size:11px;color:var(--red2);font-weight:700">desativado</span>')+
+          '</div>').join('')
+      : '<div style="font-size:12px;color:var(--muted);padding:12px 0">Nenhum codigo ainda hoje.</div>')+
+
+    '<div style="background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.25);border-radius:var(--r);padding:12px;font-size:11.5px;color:var(--muted2);line-height:1.65;margin-top:12px">'+
+      '<strong style="color:var(--text)">Como usar</strong><br>'+
+      '1. O colega professor pede um codigo para voce.<br>'+
+      '2. Voce passa um dos numeros acima.<br>'+
+      '3. Ele escreve na lousa; os alunos digitam no FARME.<br>'+
+      '4. Cada aluno ganha '+(TOKENS_HOJE.minutos||50)+' minutos. O mesmo aluno nao consegue usar o mesmo codigo duas vezes.'+
+    '</div>';
+}
+
+async function alternarJanelaFarme(ligar){
+  const js = TOKENS_HOJE.janela || {};
+  const bloqueios = Array.isArray(js.bloqueios) && js.bloqueios.length ? js.bloqueios
+    : [{de:'07:30',ate:'11:55'},{de:'12:55',ate:'16:30'}];
+  try{
+    const d = await apiFetch('/api/db?action=janela-salvar', { janela: { ativo: !!ligar, bloqueios } });
+    TOKENS_HOJE.janela = d.janela;
+    pintarModalTokens();
+    showNotif(ligar ? '🔒 Trava de horario LIGADA.' : '🔓 Trava de horario DESLIGADA.');
+  }catch(e){ showNotif('❌ '+e.message); }
+}
 
 async function openCodigosProf(){
   CTid = null; renderSB();
@@ -8597,6 +9032,7 @@ function renderAlunoApp(){
       <div class="a-side-overlay" id="a-side-overlay" onclick="toggleASidebarMobile(false)"></div>
       <div class="aluno-side a-side" id="a-side"></div>
       <div class="aluno-main a-content">
+        ${avisoJanelaHtml()}
         ${abasDisciplinaHtml()}
         <!-- BLOCO 5 — Cenário de fundo que reflete a ERA atual do aluno -->
         ${fundoEraSVG(eraAtual)}
@@ -9699,9 +10135,27 @@ async function executeRetirada(target){
 // ==============================
 let _pendingGachaItem = null;
 
-function openGacha(){
-  refreshGachaStats();
+async function openGacha(){
   openM('m-gacha');
+  refreshGachaStats();
+  // v11 — pergunta ao servidor qual e a aura REAL antes do aluno clicar.
+  // Sem isso, uma aba aberta ha muito tempo mostrava um saldo velho e o
+  // botao aparecia como "aura insuficiente" sem motivo.
+  try{
+    const r = await fetch(`${API_BASE}/api/student?action=janela`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({login: studentLogin||CU.login, senha: studentSenha||CU.senha})
+    });
+    const d = await r.json().catch(()=>({}));
+    if(r.ok){
+      if(d.acesso) FARME_ACESSO = d.acesso;
+      if(d.auraReal != null && auraPodeSincronizar()){
+        CU.aura = d.auraReal;
+        updateAuraTop();
+      }
+      refreshGachaStats();
+    }
+  }catch(e){ /* offline: segue com o valor local */ }
 }
 
 function refreshGachaStats(){
@@ -9714,35 +10168,125 @@ function refreshGachaStats(){
   document.getElementById('gacha-pity').textContent = `${pityLeft} pulls`;
   document.getElementById('gacha-bar').style.width = pct + '%';
   const btn = document.getElementById('gacha-pull-btn');
-  if(aura < GACHA_COST){
-    btn.disabled = true;
-    btn.style.opacity = '.5';
-    btn.textContent = '❌ Aura insuficiente';
+  if(!btn) return;
+  if(_gachaBusy){
+    btn.disabled = true; btn.style.opacity = '.6'; btn.textContent = 'Girando...';
+  } else if(_pendingGachaItem){
+    btn.disabled = true; btn.style.opacity = '.5';
+    btn.textContent = '⏳ Guarde o EGO anterior';
+  } else if(aura < GACHA_COST){
+    btn.disabled = true; btn.style.opacity = '.5';
+    btn.textContent = `❌ Falta ${fmtAura(GACHA_COST - aura)} de aura`;
   } else {
-    btn.disabled = false;
-    btn.style.opacity = '1';
+    btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
     btn.textContent = '🎰 PULL (-1,000)';
   }
 }
 
+// v11 — GACHA REESCRITO. Tres bugs corrigidos de uma vez:
+//   1) Nao havia trava de duplo clique: dois cliques rapidos gastavam
+//      2 auras, sobrescreviam _pendingGachaItem e entregavam 1 item so.
+//   2) A aura era descontada no navegador. Se o valor local estivesse
+//      velho, dava "aura insuficiente" com o aluno tendo aura. Agora
+//      quem desconta e o SERVIDOR, usando o saldo real do banco.
+//   3) Se o save falhasse, o item sumia calado. Agora, se nao der para
+//      entregar, a aura volta.
+let _gachaBusy = false;
+
+function travarBotaoGacha(travado, texto){
+  const btn = document.getElementById('gacha-pull-btn');
+  if(!btn) return;
+  btn.disabled = travado;
+  btn.style.opacity = travado ? '.6' : '1';
+  btn.style.cursor  = travado ? 'wait' : 'pointer';
+  if(texto) btn.textContent = texto;
+}
+
 async function doGachaPull(){
-  const aura = parseAura(CU.aura);
-  if(aura < GACHA_COST){ showNotif('Aura insuficiente!'); return; }
+  if(_gachaBusy) return;                 // trava anti duplo-clique
+  if(_pendingGachaItem){
+    showNotif('Voce ja tem um EGO esperando! Guarde ou descarte antes de girar de novo.');
+    return;
+  }
   const turma = DB.turmas.find(t=>t.id===CTid);
-  if(!turma){ showNotif('Turma não encontrada'); return; }
+  if(!turma){ showNotif('Turma nao encontrada'); return; }
 
-  // Consome aura
-  changeAura(CU, -GACHA_COST);
-  // Puxa
-  const result = pullGacha(CU, turma);
-  _pendingGachaItem = result;
+  _gachaBusy = true;
+  travarBotaoGacha(true, 'Girando...');
+  const auraAntes = parseAura(CU.aura);
 
-  // Mostra resultado com animação
-  closeM('m-gacha');
-  showGachaResult(result);
-  saveDB();
-  // Salva aura + estado do gacha no Supabase imediatamente
-  await saveAlunoBagagem();
+  try{
+    // 1) Estado do gacha (pity/contadores) calculado localmente...
+    const result = pullGacha(CU, turma);
+
+    // 2) ...mas o DEBITO e feito no servidor, com o saldo real.
+    marcarAuraSuja();
+    let deb;
+    try{
+      const r = await fetch(`${API_BASE}/api/student?action=gacha-debitar`,{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          login: studentLogin||CU.login,
+          senha: studentSenha||CU.senha,
+          gacha: CU.gacha
+        })
+      });
+      deb = await r.json().catch(()=>({}));
+      if(!r.ok){
+        // desfaz o contador do gacha, ja que o giro nao aconteceu
+        if(CU.gacha){
+          CU.gacha.totalPulls = Math.max(0,(CU.gacha.totalPulls||1)-1);
+          CU.gacha.pityCounter = Math.max(0,(CU.gacha.pityCounter||1)-1);
+        }
+        if(deb && deb.auraReal != null){ CU.aura = deb.auraReal; updateAuraTop(); }
+        if(deb && deb.code === 'fora_de_horario'){
+          if(deb.acesso) FARME_ACESSO = deb.acesso;
+          closeM('m-gacha');
+          mostrarBloqueioFarme();
+          return;
+        }
+        showNotif('❌ ' + (deb.error || 'Nao foi possivel girar agora.'));
+        refreshGachaStats();
+        return;
+      }
+    } finally { marcarAuraSalva(); }
+
+    // 3) Servidor confirmou: alinha a aura pelo valor oficial dele.
+    if(deb.auraReal != null) CU.aura = deb.auraReal;
+    else changeAura(CU, -GACHA_COST);
+    updateAuraTop();
+
+    _pendingGachaItem = result;
+    closeM('m-gacha');
+    showGachaResult(result);
+    saveDB();
+  }catch(e){
+    console.warn('doGachaPull:', e);
+    CU.aura = auraAntes;
+    updateAuraTop();
+    showNotif('❌ Falha de conexao. Sua aura nao foi gasta.');
+  } finally {
+    _gachaBusy = false;
+    travarBotaoGacha(false);
+    refreshGachaStats();
+  }
+}
+
+// v11 — devolve a aura quando o giro aconteceu mas o item nao pode ser salvo.
+async function estornarGacha(motivo){
+  try{
+    marcarAuraSuja();
+    const r = await fetch(`${API_BASE}/api/student?action=gacha-estornar`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        login: studentLogin||CU.login,
+        senha: studentSenha||CU.senha, motivo
+      })
+    });
+    const d = await r.json().catch(()=>({}));
+    if(r.ok && d.auraReal != null){ CU.aura = d.auraReal; updateAuraTop(); }
+  }catch(e){ console.warn('estornarGacha:', e); }
+  finally { marcarAuraSalva(); }
 }
 
 function showGachaResult(result){
@@ -9762,23 +10306,27 @@ function showGachaResult(result){
   setTimeout(() => { anim.style.transform = 'scale(1)'; }, 80);
 }
 
-async function saveAlunoBagagem(){
-  // Helper que salva bagagem + estado do gacha no Supabase
+// v11 — agora DEVOLVE se deu certo, e tenta de novo se falhar.
+// O parametro incluirAura fica false quando o desconto ja foi feito no
+// servidor (gacha), para o navegador nao regravar a aura por cima.
+async function saveAlunoBagagem(incluirAura){
+  const mandaAura = incluirAura !== false;
+  const patch = { bagagem: CU.bagagem, gacha: CU.gacha };
+  if(mandaAura){ patch.aura = CU.aura; marcarAuraSuja(); }
   try{
-    await fetch(`${API_BASE}/api/student?action=update`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        login:studentLogin||CU.login,
-        senha:studentSenha||CU.senha,
-        patch:{
-          bagagem: CU.bagagem,
-          gacha: CU.gacha,
-          aura: CU.aura
-        }
-      })
+    const r = await postAlunoComRetry(`${API_BASE}/api/student?action=update`, {
+      login: studentLogin||CU.login,
+      senha: studentSenha||CU.senha,
+      patch
     });
-  }catch(e){console.warn('bagagem save error:',e);}
+    if(r.ok && r.data && r.data.auraReal != null && mandaAura){
+      CU.aura = r.data.auraReal;
+      if(typeof updateAuraTop === 'function') updateAuraTop();
+    }
+    return !!r.ok;
+  } finally {
+    if(mandaAura) marcarAuraSalva();
+  }
 }
 
 async function acceptGachaEgo(){
@@ -9787,9 +10335,24 @@ async function acceptGachaEgo(){
   const slot = findFreeSlot(CU, tier);
   if(slot){
     // Tem slot livre — guarda direto
+    const backup = CU.bagagem[slot];
     CU.bagagem[slot] = {...item, gainedAt:Date.now(), tier};
     saveDB();
-    await saveAlunoBagagem();
+    // v11 — a aura ja foi descontada pelo servidor no giro, entao aqui
+    // salvamos SO bagagem+gacha (incluirAura=false).
+    const ok = await saveAlunoBagagem(false);
+    if(!ok){
+      // Nao conseguiu gravar: desfaz, devolve a aura e avisa. Antes disso
+      // o item simplesmente sumia no proximo login, sem ninguem saber.
+      CU.bagagem[slot] = backup || null;
+      saveDB();
+      renderASide();
+      await estornarGacha('falha ao salvar bagagem');
+      showNotif('❌ Nao deu para guardar o EGO. Sua aura foi devolvida — tente girar de novo.');
+      _pendingGachaItem = null;
+      closeM('m-gacha-result');
+      return;
+    }
     closeM('m-gacha-result');
     const turma = DB.turmas.find(t=>t.id===CTid);
     if(turma) addEgoLog(turma, {
@@ -9832,9 +10395,19 @@ function openSlotChoice(tier){
 async function replaceSlotWithGacha(slot){
   if(!_pendingGachaItem) return;
   const {item, tier} = _pendingGachaItem;
+  const backup = CU.bagagem[slot];
   CU.bagagem[slot] = {...item, gainedAt:Date.now(), tier};
   saveDB();
-  await saveAlunoBagagem();
+  const ok = await saveAlunoBagagem(false); // aura ja debitada no servidor
+  if(!ok){
+    CU.bagagem[slot] = backup || null;
+    saveDB(); renderASide();
+    await estornarGacha('falha ao substituir slot');
+    showNotif('❌ Nao deu para salvar. Sua aura foi devolvida.');
+    _pendingGachaItem = null;
+    closeM('m-gacha-slot');
+    return;
+  }
   closeM('m-gacha-slot');
   const turma = DB.turmas.find(t=>t.id===CTid);
   if(turma) addEgoLog(turma, {
@@ -9847,11 +10420,17 @@ async function replaceSlotWithGacha(slot){
 }
 
 function discardGachaResult(){
+  // v11 — descartar e escolha do aluno: a aura do giro NAO volta
+  // (isso e regra de jogo, nao bug). O que mudou e que agora limpamos
+  // o item pendente de forma segura, liberando o botao de girar.
   _pendingGachaItem = null;
   closeM('m-gacha-slot');
   closeM('m-gacha-result');
   showNotif('EGO descartado.');
   renderASide();
+  if(typeof refreshGachaStats === 'function'){
+    try{ refreshGachaStats(); }catch(e){}
+  }
 }
 
 // Usa um EGO — será expandido no Patch 8.3, por enquanto só consome
@@ -10239,6 +10818,14 @@ function selecionarAula(numAula){
 
 // PATCH 9.2/9.3 — Confirma e inicia missão (consome coração + registra aula no servidor)
 async function confirmStartMission(numAula){
+  // v11 — confere a janela ANTES de gastar a aula do aluno.
+  // Pergunta ao servidor na hora: se o token expirou no meio da sessao,
+  // e aqui que o sistema descobre.
+  await checarJanelaFarme(true);
+  if(!farmeAberto()){
+    mostrarBloqueioFarme();
+    return;
+  }
   if(!coracoesDesativados() && (CU.hearts||0) <= 0){
     showNotif('❌ Você não tem corações esta semana.');
     return;
@@ -10265,8 +10852,14 @@ async function confirmStartMission(numAula){
     });
     // mantém os últimos 200 registros
     if(CU.farmHistorico.length > 200) CU.farmHistorico = CU.farmHistorico.slice(-200);
-    // Persiste no servidor AGORA
+    // Persiste no servidor AGORA. O servidor funde com o que ja existe e
+    // devolve o mapa oficial — por isso reconferimos o limite DEPOIS.
     await persistirProgressoAluno({ aulasUsadas: CU.aulasUsadas, farmHistorico: CU.farmHistorico });
+    if((CU.aulasUsadas[key] || 0) > 2){
+      showNotif('🔒 Esta aula ja foi farmada 2 vezes esta semana (contando outros aparelhos). Escolha outra aula!');
+      renderAContent();
+      return;
+    }
   } else {
     CU._aulaAtual = null;
   }
@@ -10407,6 +11000,29 @@ function renderAtividadesContent(){
         <div style="font-size:12px;color:var(--muted)">Jogue e ganhe aura! Cada 1.000 pontos = 1,000 aura (limite de 3,000 aura por semana).</div>
       </div>
 
+      <!-- v11 — ATALHO DO FARME WAR (pedido dos alunos) -->
+      <div onclick="abrirWar()" role="button" tabindex="0"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirWar();}"
+        style="position:relative;overflow:hidden;cursor:pointer;margin-bottom:18px;padding:20px 22px;border-radius:var(--r2);
+               background:linear-gradient(120deg,rgba(139,92,246,.22),rgba(240,180,41,.14));
+               border:2px solid var(--purple2);box-shadow:0 6px 24px rgba(124,92,252,.22);
+               display:flex;align-items:center;gap:18px;flex-wrap:wrap;transition:transform .15s,box-shadow .15s"
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 10px 32px rgba(124,92,252,.36)'"
+        onmouseout="this.style.transform='';this.style.boxShadow='0 6px 24px rgba(124,92,252,.22)'">
+        <div style="font-size:52px;line-height:1;filter:drop-shadow(0 3px 8px rgba(0,0,0,.45))">🏰</div>
+        <div style="flex:1;min-width:190px">
+          <div style="font-family:'Orbitron',monospace;font-size:19px;font-weight:900;letter-spacing:1px;color:var(--gold)">FARME WAR</div>
+          <div style="font-size:12.5px;color:var(--text);margin-top:4px;line-height:1.5">
+            Sua vila, sua indústria, suas conquistas. Construa, evolua de era e dispute o Mundo com as outras turmas.
+          </div>
+        </div>
+        <div style="background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;
+                    padding:14px 26px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;
+                    font-size:14px;letter-spacing:1px;white-space:nowrap;box-shadow:0 4px 16px rgba(124,92,252,.45)">
+          ▶ ENTRAR NO WAR
+        </div>
+      </div>
+
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:18px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="font-size:12px;color:var(--muted2);font-weight:700">Pontos desta semana</div>
@@ -10436,6 +11052,10 @@ function abrirAtividade(id){
   window._atividadeAtual = id;
   window._atividadePontosInicio = ap.pontos;
   window._atividadeUltimoScore = 0;
+  // v11 - estado do anti-flood, zerado a cada atividade aberta
+  window._atividadeUltimoTs = 0;
+  window._atividadeRajada = 0;
+  window._atividadeAvisouRajada = false;
 
   // PATCH 9.4 — Modal fullscreen para o jogo ocupar a tela toda
   let overlay = document.getElementById('atividade-fullscreen');
@@ -10490,7 +11110,44 @@ function fecharAtividade(){
 
       const scoreAtual = Math.max(0, Math.round(data.pontos || 0));
       const delta = scoreAtual - (window._atividadeUltimoScore || 0);
+
+      // ---- v11: ANTI-FLOOD -------------------------------------------
+      // Sintoma relatado: apertando muito rapido, o aluno "termina" a
+      // atividade inteira. A causa esta no script de CADA atividade
+      // (botao de resposta sem trava). Esta checagem NAO conserta a
+      // atividade - ela so impede que a aura seja creditada quando a
+      // pontuacao chega em rajada, rapido demais para ser jogo real.
+      const agora = Date.now();
+      const desdeUltimo = agora - (window._atividadeUltimoTs || 0);
+      const MIN_MS_ENTRE_PONTOS = 900;   // menos que isso = tap em rajada
+      const MAX_PTS_POR_MENSAGEM = 500;  // salto maior que isso = suspeito
+
+      if(delta > 0 && desdeUltimo < MIN_MS_ENTRE_PONTOS){
+        window._atividadeRajada = (window._atividadeRajada || 0) + 1;
+        // 3 rajadas seguidas: para de creditar e avisa o aluno.
+        if(window._atividadeRajada >= 3){
+          window._atividadeUltimoScore = scoreAtual;
+          window._atividadeUltimoTs = agora;
+          if(!window._atividadeAvisouRajada){
+            window._atividadeAvisouRajada = true;
+            showNotif('\u26a0\ufe0f Vai com calma! Pontos ganhos em cliques muito rapidos nao contam.');
+          }
+          return;
+        }
+      } else if(delta > 0){
+        window._atividadeRajada = 0;
+      }
+
+      if(delta > MAX_PTS_POR_MENSAGEM){
+        console.warn('[FARME] Salto de pontos suspeito:', delta, 'na atividade', window._atividadeAtual);
+        window._atividadeUltimoScore = scoreAtual;
+        window._atividadeUltimoTs = agora;
+        showNotif('\u26a0\ufe0f Pontuacao fora do esperado nesta atividade. Avise seu professor.');
+        return;
+      }
+
       window._atividadeUltimoScore = scoreAtual;
+      window._atividadeUltimoTs = agora;
       if(delta <= 0) return;
 
       const ap = getAtividadePontos();
