@@ -566,7 +566,15 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
     background: var(--bg3);
     border-radius: 8px;
     border: 1px solid var(--border);
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
+  /* v11 - chip de nota: no celular ocupa a linha toda, embaixo do tempo */
+  #topbar-nota {
+    flex: 1 0 100%;
+    justify-content: center;
+  }
+  #topbar-nota > div { min-width: 120px !important; }
   
   /* App do aluno: tudo flow natural */
   .aluno-app, .a-wrap {
@@ -2042,8 +2050,39 @@ function totalAcumuladoSessao(){
 
 function qtdPerguntasAvaliadas(){ return Object.keys(notasPorPergunta).length; }
 
-// Barra de progresso da pontuacao, mostrada acima do chat
+// v11 — CHIP DE NOTA PARA A TOPBAR (fica fixo ao lado do timer)
+// A barra do chat sumia sempre que o aluno trocava de aba ou o chat
+// re-renderizava. A topbar nao some: ela existe o tempo todo enquanto
+// a missao esta ativa, entao a nota fica sempre a vista.
+function chipNotaTopbarHtml(){
+  const total = totalAcumuladoSessao();
+  const teto = SESSION_MAX_AURA;
+  const pct = Math.min(100, (total/teto)*100);
+  const avaliadas = qtdPerguntasAvaliadas();
+  const completo = avaliadas >= CALVAO_TOTAL_PERGUNTAS;
+  return `<div id="topbar-nota" title="Sua pontuacao nesta sessao do Calvao"
+    style="display:flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid ${completo?'var(--gold)':'var(--border)'};border-radius:8px;padding:4px 10px;min-width:0">
+    <span style="font-size:13px;line-height:1">${completo?'🏆':'⭐'}</span>
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:74px">
+      <div style="display:flex;align-items:baseline;gap:4px;white-space:nowrap">
+        <span style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--gold);line-height:1">${fmtAura(total)}</span>
+        <span style="font-size:9.5px;color:var(--muted);line-height:1">/ ${fmtAura(teto)}</span>
+      </div>
+      <div style="height:4px;background:var(--bg2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--purple),var(--gold));transition:width .5s ease"></div>
+      </div>
+    </div>
+    <span style="font-size:10px;color:var(--muted2);font-weight:700;white-space:nowrap">${avaliadas}/${CALVAO_TOTAL_PERGUNTAS}</span>
+  </div>`;
+}
+
+// Barra de progresso da pontuacao (chat + topbar)
 function atualizarBarraPontuacao(){
+  // v11 — a topbar e a fonte fixa: repinta o timer, que ja carrega o chip.
+  if(typeof missionActive !== 'undefined' && missionActive
+     && typeof updateMissionTimerUI === 'function'){
+    try{ updateMissionTimerUI(); }catch(e){}
+  }
   const wrap = document.getElementById('calvao-barra-pontos');
   if(!wrap) return;
   const total = totalAcumuladoSessao();
@@ -10583,6 +10622,11 @@ function renderAContent(){
       initChat();
     }
   }
+  // v11 — a barra de nota do chat nasce vazia a cada re-render. Preenche
+  // agora, senao ela fica em branco ate a proxima pergunta ser avaliada.
+  if(missionActive && typeof atualizarBarraPontuacao === 'function'){
+    setTimeout(()=>{ try{ atualizarBarraPontuacao(); }catch(e){} }, 30);
+  }
   else if(ATab==='ranking') el.innerHTML=renderRankingContent();
   else if(ATab==='global') el.innerHTML=renderRankingGlobalContent();
   else if(ATab==='semanal'){ const t=DB.turmas.find(x=>x.id===CTid); el.innerHTML=renderRankingSemanal(t); }
@@ -11588,6 +11632,7 @@ function updateMissionTimerUI(){
   const html = `
     <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">${paused?'⏸ Pausado':'⏱ Missão'}</div>
     <div style="font-size:18px;font-weight:900;color:${paused?'var(--gold)':lowTime?'var(--red2)':'var(--purple2)'};min-width:70px;text-align:center">${fmtTime(remaining)}</div>
+    ${typeof chipNotaTopbarHtml === 'function' ? chipNotaTopbarHtml() : ''}
     <button onclick="${paused?'resumeMissionTimer':'pauseMissionTimer'}()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 11px;border-radius:6px;font-size:11px;font-family:'Syne',sans-serif;font-weight:600;cursor:pointer">${paused?'▶ Retomar':'⏸ Pausar'}</button>
     <button onclick="endMissionVoluntarily()" style="background:rgba(229,62,62,.15);border:1px solid var(--red2);color:var(--red2);padding:5px 11px;border-radius:6px;font-size:11px;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer">🏁 Encerrar</button>`;
   
@@ -12170,7 +12215,13 @@ async function sendMsg(){
   // Bloco DINÂMICO mínimo — só dados que mudam por aluno
   // PATCH 9.3 — inclui aula escolhida no contexto dinâmico
   const aulaInfo = CU._aulaAtual ? ` | 📚 AULA SELECIONADA: Aula ${CU._aulaAtual} (o aluno escolheu especificamente esta aula para farmar — confirme isso na primeira mensagem e mantenha o foco no conteúdo desta aula durante toda a sessão)` : '';
-  const sysDinamico = `\n\nALUNO: ${CU.nome.split(' ')[0]} | Aura: ${fmtAura(CU.aura)} | Turno: ${missionStep}${isSQ?' | ⭐ SUPER QUEST':''}${aulaInfo}`;
+  // v11 — placar corrente: a IA precisa saber quanto ja foi dado e quais
+  // perguntas ja tem nota, senao ela repontua a mesma pergunta e estoura o teto.
+  const notasDadas = Object.keys(notasPorPergunta)
+    .sort((a,b)=>parseInt(a,10)-parseInt(b,10))
+    .map(k=>`P${k}=${fmtAura(notasPorPergunta[k])}`).join(' ');
+  const placar = `\nPLACAR DA SESSAO: ${fmtAura(totalAcumuladoSessao())} de ${fmtAura(SESSION_MAX_AURA)} | ${qtdPerguntasAvaliadas()}/${CALVAO_TOTAL_PERGUNTAS} perguntas ja pontuadas${notasDadas?` (${notasDadas})`:''} | valor maximo de cada pergunta: ${fmtAura(valorPorPergunta())}`;
+  const sysDinamico = `\n\nALUNO: ${CU.nome.split(' ')[0]} | Aura: ${fmtAura(CU.aura)} | Turno: ${missionStep}${isSQ?' | ⭐ SUPER QUEST':''}${aulaInfo}${placar}`;
 
   // Contexto da aula (TEMA + RESUMO + PERGUNTAS) — só envia no PRIMEIRO turno do aluno
   // A partir do turno 2, o contexto já está no histórico de mensagens
