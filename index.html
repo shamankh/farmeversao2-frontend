@@ -10776,7 +10776,7 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
         <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin:14px 0 18px;font-size:12px;color:var(--muted)">
           <span style="font-weight:700;color:var(--green2)">✓ Sem limite de tentativas · 2 acessos por aula/semana</span>
         </div>
-        <button onclick="confirmStartMission(null)" style="background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;padding:14px 38px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:1px;box-shadow:0 4px 20px rgba(124,92,252,.4)">
+        <button id="btn-comecar-livre" onclick="confirmStartMission(null)" style="background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;padding:14px 38px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:1px;box-shadow:0 4px 20px rgba(124,92,252,.4)">
           🚀 COMEÇAR A FARMAR
         </button>
       </div>`;
@@ -10831,7 +10831,7 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
           style="flex:1;background:var(--bg3);border:1.5px solid var(--border);color:var(--muted);padding:13px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;font-size:14px;cursor:not-allowed;letter-spacing:.5px;min-width:200px">
           🚀 COMEÇAR A FARMAR
         </button>
-        ${getCalvaoSuperQuest()?`<button onclick="confirmStartSuperQuest()" style="background:rgba(240,180,41,.1);border:1.5px solid var(--gold);color:var(--gold);padding:13px 18px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;font-size:12px;cursor:pointer">⭐ SUPER QUEST</button>`:''}
+        ${getCalvaoSuperQuest()?`<button id="btn-super-quest" onclick="confirmStartSuperQuest()" style="background:rgba(240,180,41,.1);border:1.5px solid var(--gold);color:var(--gold);padding:13px 18px;border-radius:10px;font-family:'Orbitron',monospace;font-weight:900;font-size:12px;cursor:pointer">⭐ SUPER QUEST</button>`:''}
       </div>
       
       <div style="display:flex;gap:12px;margin-top:10px;font-size:10px;color:var(--muted);flex-wrap:wrap">
@@ -10845,6 +10845,10 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
 // PATCH 9.3 — Seleciona aula no grid antes de começar
 window._aulaSelecionada = null;
 function selecionarAula(numAula){
+  // v11 — se a missao ja esta sendo iniciada (aluno deu o segundo toque
+  // enquanto o primeiro clique no "COMEÇAR A FARMAR" ainda processava),
+  // ignora a troca de aula para nao confundir qual aula sera usada.
+  if(_iniciandoMissao) return;
   window._aulaSelecionada = numAula;
   const box = document.getElementById('aula-selecionada-box');
   const label = document.getElementById('aula-selecionada-label');
@@ -10860,8 +10864,40 @@ function selecionarAula(numAula){
   }
 }
 
+// v11 — trava compartilhada dos botoes de iniciar missao (farmar / super quest).
+// Fica fora da funcao para sobreviver entre chamadas.
+let _iniciandoMissao = false;
+
+function travarBotoesIniciarMissao(travado, textoOcupado){
+  ['btn-comecar-farmar','btn-comecar-livre','btn-super-quest'].forEach(id=>{
+    const b = document.getElementById(id);
+    if(!b) return;
+    if(travado){
+      b.dataset.textoOriginal = b.dataset.textoOriginal || b.innerHTML;
+      b.disabled = true;
+      b.style.opacity = '.6';
+      b.style.cursor = 'wait';
+      b.innerHTML = textoOcupado || '⏳ Abrindo...';
+    } else {
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.cursor = 'pointer';
+      if(b.dataset.textoOriginal) b.innerHTML = b.dataset.textoOriginal;
+    }
+  });
+}
+
 // PATCH 9.2/9.3 — Confirma e inicia missão (consome coração + registra aula no servidor)
 async function confirmStartMission(numAula){
+  // v11 — TRAVA SINCRONA. Esta linha roda ANTES de qualquer await, entao
+  // um segundo clique (duplo clique, duplo toque, aparelho lento demorando
+  // a reagir) sempre encontra "_iniciandoMissao=true" e sai aqui, sem
+  // duplicar aula usada, coracao gasto ou missao iniciada duas vezes.
+  if(_iniciandoMissao) return;
+  _iniciandoMissao = true;
+  travarBotoesIniciarMissao(true);
+
+  try{
   // v11 — confere a janela ANTES de gastar a aula do aluno.
   // Pergunta ao servidor na hora: se o token expirou no meio da sessao,
   // e aqui que o sistema descobre.
@@ -10925,10 +10961,24 @@ async function confirmStartMission(numAula){
       if(btn && missionActive) btn.disabled = false;
     }, 200);
   }, 120);
+  } finally {
+    // v11 — destrava SEMPRE, mesmo em erro/return antecipado. Por essa
+    // altura o renderAContent() ja trocou o DOM (ou nem chegou a mostrar
+    // mais o seletor de aula), entao destravar aqui e seguro.
+    _iniciandoMissao = false;
+    travarBotoesIniciarMissao(false);
+  }
 }
 
 // PATCH 9.2 — Confirma e inicia Super Quest
 function confirmStartSuperQuest(){
+  // v11 — mesma trava sincrona do confirmStartMission. Esta funcao nao tem
+  // await, mas o clique duplo (toque duplo, mouse com bounce) ainda podia
+  // chamar ela duas vezes antes do primeiro renderAContent() trocar o DOM.
+  if(_iniciandoMissao) return;
+  _iniciandoMissao = true;
+  travarBotoesIniciarMissao(true, '⏳ Abrindo Super Quest...');
+
   CU._currentIsSuperQuest = true;
   window._aulaSelecionada = null;
   window._missionPending = true;
@@ -10943,6 +10993,9 @@ function confirmStartSuperQuest(){
       if(btn && missionActive) btn.disabled = false;
     }, 200);
   }, 120);
+
+  _iniciandoMissao = false;
+  travarBotoesIniciarMissao(false);
 }
 
 // Helper: detecta se há Super Quest disponível para o aluno
