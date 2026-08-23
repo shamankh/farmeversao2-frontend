@@ -6357,11 +6357,23 @@ const CRONO = {
   intervalo: null,
   bipeIntervalo: null,
   pos: { x: null, y: null },   // posicao da janela (memoria da sessao)
-  audioCtx: null
+  audioCtx: null,
+  // v12.1 — nivel de tamanho da janela. Comeca em 2 (o "dobro" que voce
+  // pediu). Os botoes A- / A+ da barra andam por esta lista.
+  nivel: 2
 };
 
 const CRONO_MIN = 1;     // minimo 1 minuto
 const CRONO_MAX = 120;   // maximo 2 horas
+
+// Multiplicadores de tamanho. O indice 0 e o tamanho original; o 2 e o dobro.
+const CRONO_ESCALAS = [1, 1.45, 2, 2.6, 3.3];
+
+function cronoEsc(){ return CRONO_ESCALAS[CRONO.nivel] || 2; }
+// Arredonda em px, com um minimo, para nada sumir nos niveis pequenos.
+function cx(valor, minimo){
+  return Math.max(minimo || 0, Math.round(valor * cronoEsc())) + 'px';
+}
 
 function cronoFmt(ms){
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -6410,11 +6422,12 @@ function abrirCronometro(){
   j.id = 'crono-janela';
   // Canto superior direito, como voce pediu. z-index 50000 fica acima de
   // todos os modais do professor (que usam ate 10500).
-  const x = CRONO.pos.x !== null ? CRONO.pos.x : (window.innerWidth - 268);
+  const larg = Math.round(248 * cronoEsc());
+  const x = CRONO.pos.x !== null ? CRONO.pos.x : Math.max(8, window.innerWidth - larg - 20);
   const y = CRONO.pos.y !== null ? CRONO.pos.y : 74;
   j.style.cssText =
-    'position:fixed;left:'+x+'px;top:'+y+'px;z-index:50000;width:248px;' +
-    'background:var(--bg2);border:1.5px solid var(--gold);border-radius:14px;' +
+    'position:fixed;left:'+x+'px;top:'+y+'px;z-index:50000;width:'+larg+'px;' +
+    'background:var(--bg2);border:'+cx(1.5,1)+' solid var(--gold);border-radius:'+cx(14,8)+';' +
     'box-shadow:0 12px 40px rgba(0,0,0,.55);overflow:hidden;user-select:none;' +
     'font-family:\'Syne\',sans-serif';
   j.innerHTML = cronoHtml();
@@ -6423,16 +6436,53 @@ function abrirCronometro(){
   cronoPintar();
 }
 
+// v12.1 — muda o tamanho da janela sem interromper a contagem.
+// So redesenha: o tempo continua vindo do timestamp de fim, entao
+// aumentar ou diminuir nao adianta nem atrasa o cronometro.
+function cronoTamanho(delta){
+  const novo = CRONO.nivel + delta;
+  if(novo < 0 || novo >= CRONO_ESCALAS.length) return;
+  CRONO.nivel = novo;
+  const j = document.getElementById('crono-janela');
+  if(!j) return;
+  const larg = Math.round(248 * cronoEsc());
+  j.style.width = larg + 'px';
+  j.style.borderWidth = cx(1.5,1);
+  j.style.borderRadius = cx(14,8);
+  // se cresceu e passou da borda da tela, puxa de volta para dentro
+  const maxX = window.innerWidth - larg - 4;
+  const atualX = parseInt(j.style.left,10) || 0;
+  if(atualX > maxX){
+    const nx = Math.max(4, maxX);
+    j.style.left = nx + 'px';
+    CRONO.pos.x = nx;
+  }
+  j.innerHTML = cronoHtml();
+  cronoAtivarArraste(j);
+  cronoPintar();
+}
+
 function cronoHtml(){
+  const btnBarra = (rotulo, acao, titulo, desativado) =>
+    `<button onclick="${acao}" title="${titulo}" ${desativado?'disabled':''}
+      style="background:transparent;border:${cx(1,1)} solid var(--border2);color:${desativado?'var(--border2)':'var(--muted)'};
+             width:${cx(22,20)};height:${cx(22,20)};border-radius:50%;cursor:${desativado?'default':'pointer'};
+             font-size:${cx(13,11)};font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;flex:0 0 auto">${rotulo}</button>`;
+
+  const noMenor = CRONO.nivel <= 0;
+  const noMaior = CRONO.nivel >= CRONO_ESCALAS.length - 1;
+
   return `
-    <div id="crono-barra" style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:linear-gradient(135deg,rgba(124,92,252,.22),rgba(240,180,41,.16));border-bottom:1px solid var(--border);cursor:move">
-      <span style="font-size:13px">⏱️</span>
-      <span style="font-family:'Orbitron',monospace;font-size:11px;font-weight:900;letter-spacing:.5px;color:var(--gold)">CRONOMETRO</span>
-      <span style="font-size:9.5px;color:var(--muted2);margin-left:2px">arraste</span>
-      <button onclick="fecharCronometro()" title="Fechar"
-        style="margin-left:auto;background:transparent;border:1px solid var(--border2);color:var(--muted);width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">×</button>
+    <div id="crono-barra" style="display:flex;align-items:center;gap:${cx(5,4)};padding:${cx(8,6)} ${cx(10,8)};background:linear-gradient(135deg,rgba(124,92,252,.22),rgba(240,180,41,.16));border-bottom:${cx(1,1)} solid var(--border);cursor:move">
+      <span style="font-size:${cx(13,12)}">⏱️</span>
+      <span style="font-family:'Orbitron',monospace;font-size:${cx(11,10)};font-weight:900;letter-spacing:.5px;color:var(--gold);white-space:nowrap">CRONOMETRO</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:${cx(4,3)}">
+        ${btnBarra('−', 'cronoTamanho(-1)', 'Diminuir a janela', noMenor)}
+        ${btnBarra('+', 'cronoTamanho(1)',  'Aumentar a janela', noMaior)}
+        ${btnBarra('×', 'fecharCronometro()', 'Fechar', false)}
+      </span>
     </div>
-    <div id="crono-corpo" style="padding:14px 12px"></div>`;
+    <div id="crono-corpo" style="padding:${cx(14,10)} ${cx(12,10)}"></div>`;
 }
 
 // Arrastar pela barra do titulo (mouse e toque).
@@ -6494,28 +6544,28 @@ function cronoPintar(){
   if(!CRONO.rodando && !CRONO.acabou){
     // ── Tela de ajuste (antes de iniciar) ──
     corpo.innerHTML = `
-      <div style="text-align:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Duracao</div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
-        <button onclick="cronoAjustar(-1)" style="width:34px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-size:20px;font-weight:900;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">−</button>
-        <div style="font-family:'Orbitron',monospace;font-size:32px;font-weight:900;color:var(--gold);min-width:96px;text-align:center;line-height:1">${cronoFmt(CRONO.minutos*60000)}</div>
-        <button onclick="cronoAjustar(1)" style="width:34px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-size:20px;font-weight:900;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">+</button>
+      <div style="text-align:center;font-size:${cx(10,9)};color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:${cx(6,5)}">Duracao</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:${cx(10,8)};margin-bottom:${cx(12,10)}">
+        <button onclick="cronoAjustar(-1)" style="width:${cx(34,30)};height:${cx(34,30)};border-radius:${cx(9,7)};border:${cx(1.5,1)} solid var(--border2);background:var(--bg3);color:var(--text);font-size:${cx(20,16)};font-weight:900;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;flex:0 0 auto">−</button>
+        <div style="font-family:'Orbitron',monospace;font-size:${cx(32,22)};font-weight:900;color:var(--gold);min-width:${cx(96,80)};text-align:center;line-height:1">${cronoFmt(CRONO.minutos*60000)}</div>
+        <button onclick="cronoAjustar(1)" style="width:${cx(34,30)};height:${cx(34,30)};border-radius:${cx(9,7)};border:${cx(1.5,1)} solid var(--border2);background:var(--bg3);color:var(--text);font-size:${cx(20,16)};font-weight:900;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;flex:0 0 auto">+</button>
       </div>
-      <div style="display:flex;gap:5px;justify-content:center;margin-bottom:12px">
-        ${[2,5,10,15,20].map(m=>`<button onclick="cronoDefinir(${m})" style="flex:1;padding:5px 0;border-radius:7px;border:1px solid ${CRONO.minutos===m?'var(--gold)':'var(--border)'};background:${CRONO.minutos===m?'rgba(240,180,41,.14)':'var(--bg3)'};color:${CRONO.minutos===m?'var(--gold)':'var(--muted2)'};font-size:11px;font-weight:700;cursor:pointer">${m}</button>`).join('')}
+      <div style="display:flex;gap:${cx(5,4)};justify-content:center;margin-bottom:${cx(12,10)}">
+        ${[2,5,10,15,20].map(m=>`<button onclick="cronoDefinir(${m})" style="flex:1;padding:${cx(5,5)} 0;border-radius:${cx(7,6)};border:${cx(1,1)} solid ${CRONO.minutos===m?'var(--gold)':'var(--border)'};background:${CRONO.minutos===m?'rgba(240,180,41,.14)':'var(--bg3)'};color:${CRONO.minutos===m?'var(--gold)':'var(--muted2)'};font-size:${cx(11,10)};font-weight:700;cursor:pointer">${m}</button>`).join('')}
       </div>
-      <button onclick="cronoIniciar()" style="width:100%;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;font-family:'Orbitron',monospace;font-weight:900;font-size:13px;letter-spacing:1px;cursor:pointer">▶ INICIAR</button>`;
+      <button onclick="cronoIniciar()" style="width:100%;padding:${cx(11,10)};border-radius:${cx(10,8)};border:none;background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;font-family:'Orbitron',monospace;font-weight:900;font-size:${cx(13,12)};letter-spacing:1px;cursor:pointer">▶ INICIAR</button>`;
     return;
   }
 
   // ── Tela de contagem ──
   corpo.innerHTML = `
-    <div id="crono-display" style="text-align:center;font-family:'Orbitron',monospace;font-size:42px;font-weight:900;color:${cor};line-height:1;margin-bottom:4px;${acabou?'animation:cronoPisca .7s infinite':''}">${cronoFmt(ms)}</div>
-    <div style="text-align:center;font-size:10.5px;color:var(--muted);margin-bottom:12px">
+    <div id="crono-display" style="text-align:center;font-family:'Orbitron',monospace;font-size:${cx(42,28)};font-weight:900;color:${cor};line-height:1;margin-bottom:${cx(4,4)};${acabou?'animation:cronoPisca .7s infinite':''}">${cronoFmt(ms)}</div>
+    <div style="text-align:center;font-size:${cx(10.5,10)};color:var(--muted);margin-bottom:${cx(12,10)}">
       ${acabou ? '⏰ Tempo esgotado!' : CRONO.pausado ? '⏸ Pausado' : 'de ' + cronoFmt(CRONO.minutos*60000)}
     </div>
-    <div style="display:flex;gap:6px">
-      ${acabou ? '' : `<button onclick="cronoPausar()" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">${CRONO.pausado?'▶ Retomar':'⏸ Pausar'}</button>`}
-      <button onclick="cronoReiniciar()" style="${acabou?'flex:1':'flex:0 0 auto'};padding:9px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);font-size:12px;font-weight:700;cursor:pointer">🔄 ${acabou?'Novo tempo':''}</button>
+    <div style="display:flex;gap:${cx(6,5)}">
+      ${acabou ? '' : `<button onclick="cronoPausar()" style="flex:1;padding:${cx(9,8)};border-radius:${cx(9,7)};border:${cx(1,1)} solid var(--border2);background:var(--bg3);color:var(--text);font-size:${cx(12,11)};font-weight:700;cursor:pointer">${CRONO.pausado?'▶ Retomar':'⏸ Pausar'}</button>`}
+      <button onclick="cronoReiniciar()" style="${acabou?'flex:1':'flex:0 0 auto'};padding:${cx(9,8)} ${cx(12,10)};border-radius:${cx(9,7)};border:${cx(1,1)} solid var(--border2);background:var(--bg3);color:var(--muted2);font-size:${cx(12,11)};font-weight:700;cursor:pointer">🔄 ${acabou?'Novo tempo':''}</button>
     </div>`;
 }
 
@@ -6607,6 +6657,16 @@ function fecharCronometro(){
 window.addEventListener('resize', () => {
   const j = document.getElementById('crono-janela');
   if(!j) return;
+  // v12.1 — se a janela ficou maior que a tela (professor diminuiu o
+  // navegador ou girou o tablet), encolhe um nivel ate caber.
+  while(CRONO.nivel > 0 && Math.round(248 * cronoEsc()) > window.innerWidth - 16){
+    CRONO.nivel--;
+    const larg = Math.round(248 * cronoEsc());
+    j.style.width = larg + 'px';
+    j.innerHTML = cronoHtml();
+    cronoAtivarArraste(j);
+    cronoPintar();
+  }
   const maxX = window.innerWidth - j.offsetWidth - 4;
   const maxY = window.innerHeight - 44;
   const nx = Math.max(4, Math.min(maxX, parseInt(j.style.left,10) || 0));
