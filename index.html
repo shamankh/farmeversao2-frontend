@@ -457,6 +457,8 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 .aula-alert.show{display:flex;}
 .aula-alert-dot{width:10px;height:10px;border-radius:50%;background:var(--gold);animation:blink 1s ease-in-out infinite;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+/* v12 - piscada do cronometro quando o tempo zera */
+@keyframes cronoPisca{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.96);}}
 
 /* REGRAS TABLE */
 .rules-tbl{width:100%;border-collapse:collapse;font-size:12px;}
@@ -6332,6 +6334,287 @@ function renderRankingGlobalContent(){
     </div>`;
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// v12 — CRONOMETRO FLUTUANTE (painel do professor)
+//
+// Por que ele e um elemento solto no <body> e nao parte de nenhuma aba:
+// assim ele sobrevive a QUALQUER re-render da pagina. O professor pode
+// abrir e fechar o modal de chamada fria dezenas de vezes, trocar de aba,
+// marcar acertou/errou — nada disso o afeta. So o X dele mesmo o fecha.
+//
+// A contagem usa timestamp absoluto (fim - agora), nao soma de ticks.
+// Isso mantem o tempo exato mesmo se o navegador engasgar entre cliques.
+// ══════════════════════════════════════════════════════════════════
+
+const CRONO = {
+  minutos: 5,            // valor escolhido antes de iniciar
+  fimEm: 0,              // timestamp de quando deve zerar
+  restanteMs: 0,         // usado quando esta pausado
+  rodando: false,
+  pausado: false,
+  acabou: false,
+  intervalo: null,
+  bipeIntervalo: null,
+  pos: { x: null, y: null },   // posicao da janela (memoria da sessao)
+  audioCtx: null
+};
+
+const CRONO_MIN = 1;     // minimo 1 minuto
+const CRONO_MAX = 120;   // maximo 2 horas
+
+function cronoFmt(ms){
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const seg = total % 60;
+  return String(m).padStart(2,'0') + ':' + String(seg).padStart(2,'0');
+}
+
+// Bipe curto gerado na hora (sem arquivo de audio externo).
+function cronoBipe(){
+  try{
+    if(!CRONO.audioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return;
+      CRONO.audioCtx = new AC();
+    }
+    const ctx = CRONO.audioCtx;
+    if(ctx.state === 'suspended') ctx.resume();
+    // dois toques curtos, tipo despertador discreto
+    [0, 0.18].forEach(atraso => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + atraso);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + atraso + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + atraso + 0.14);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + atraso);
+      osc.stop(ctx.currentTime + atraso + 0.16);
+    });
+  }catch(e){ /* navegador bloqueou audio: segue so com o visual */ }
+}
+
+function abrirCronometro(){
+  if(document.getElementById('crono-janela')){
+    // ja esta aberto: so chama a atencao para ele
+    const j = document.getElementById('crono-janela');
+    j.style.transition = 'none';
+    j.style.transform = 'scale(1.04)';
+    setTimeout(()=>{ j.style.transition='transform .18s'; j.style.transform='scale(1)'; }, 90);
+    return;
+  }
+
+  const j = document.createElement('div');
+  j.id = 'crono-janela';
+  // Canto superior direito, como voce pediu. z-index 50000 fica acima de
+  // todos os modais do professor (que usam ate 10500).
+  const x = CRONO.pos.x !== null ? CRONO.pos.x : (window.innerWidth - 268);
+  const y = CRONO.pos.y !== null ? CRONO.pos.y : 74;
+  j.style.cssText =
+    'position:fixed;left:'+x+'px;top:'+y+'px;z-index:50000;width:248px;' +
+    'background:var(--bg2);border:1.5px solid var(--gold);border-radius:14px;' +
+    'box-shadow:0 12px 40px rgba(0,0,0,.55);overflow:hidden;user-select:none;' +
+    'font-family:\'Syne\',sans-serif';
+  j.innerHTML = cronoHtml();
+  document.body.appendChild(j);
+  cronoAtivarArraste(j);
+  cronoPintar();
+}
+
+function cronoHtml(){
+  return `
+    <div id="crono-barra" style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:linear-gradient(135deg,rgba(124,92,252,.22),rgba(240,180,41,.16));border-bottom:1px solid var(--border);cursor:move">
+      <span style="font-size:13px">⏱️</span>
+      <span style="font-family:'Orbitron',monospace;font-size:11px;font-weight:900;letter-spacing:.5px;color:var(--gold)">CRONOMETRO</span>
+      <span style="font-size:9.5px;color:var(--muted2);margin-left:2px">arraste</span>
+      <button onclick="fecharCronometro()" title="Fechar"
+        style="margin-left:auto;background:transparent;border:1px solid var(--border2);color:var(--muted);width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">×</button>
+    </div>
+    <div id="crono-corpo" style="padding:14px 12px"></div>`;
+}
+
+// Arrastar pela barra do titulo (mouse e toque).
+function cronoAtivarArraste(janela){
+  const barra = janela.querySelector('#crono-barra');
+  let arrastando = false, dx = 0, dy = 0;
+
+  const inicio = (cx, cy) => {
+    arrastando = true;
+    const r = janela.getBoundingClientRect();
+    dx = cx - r.left; dy = cy - r.top;
+    janela.style.transition = 'none';
+  };
+  const mover = (cx, cy) => {
+    if(!arrastando) return;
+    // nao deixa sair da tela
+    const maxX = window.innerWidth - janela.offsetWidth - 4;
+    const maxY = window.innerHeight - 44;
+    const nx = Math.max(4, Math.min(maxX, cx - dx));
+    const ny = Math.max(4, Math.min(maxY, cy - dy));
+    janela.style.left = nx + 'px';
+    janela.style.top  = ny + 'px';
+    CRONO.pos.x = nx; CRONO.pos.y = ny;
+  };
+  const fim = () => { arrastando = false; };
+
+  barra.addEventListener('mousedown', e => {
+    if(e.target.tagName === 'BUTTON') return;
+    e.preventDefault(); inicio(e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', e => mover(e.clientX, e.clientY));
+  document.addEventListener('mouseup', fim);
+
+  barra.addEventListener('touchstart', e => {
+    if(e.target.tagName === 'BUTTON') return;
+    const t = e.touches[0]; inicio(t.clientX, t.clientY);
+  }, {passive:true});
+  document.addEventListener('touchmove', e => {
+    if(!arrastando) return;
+    const t = e.touches[0]; mover(t.clientX, t.clientY);
+  }, {passive:true});
+  document.addEventListener('touchend', fim);
+}
+
+function cronoRestanteMs(){
+  if(CRONO.pausado) return CRONO.restanteMs;
+  if(!CRONO.rodando) return CRONO.minutos * 60000;
+  return Math.max(0, CRONO.fimEm - Date.now());
+}
+
+function cronoPintar(){
+  const corpo = document.getElementById('crono-corpo');
+  if(!corpo) return;
+  const ms = cronoRestanteMs();
+  const acabou = CRONO.acabou;
+  const pouco = !acabou && CRONO.rodando && !CRONO.pausado && ms <= 30000;
+  const cor = acabou ? 'var(--red2)' : pouco ? 'var(--red2)' : CRONO.pausado ? 'var(--gold)' : 'var(--purple2)';
+
+  if(!CRONO.rodando && !CRONO.acabou){
+    // ── Tela de ajuste (antes de iniciar) ──
+    corpo.innerHTML = `
+      <div style="text-align:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Duracao</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
+        <button onclick="cronoAjustar(-1)" style="width:34px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-size:20px;font-weight:900;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">−</button>
+        <div style="font-family:'Orbitron',monospace;font-size:32px;font-weight:900;color:var(--gold);min-width:96px;text-align:center;line-height:1">${cronoFmt(CRONO.minutos*60000)}</div>
+        <button onclick="cronoAjustar(1)" style="width:34px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-size:20px;font-weight:900;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">+</button>
+      </div>
+      <div style="display:flex;gap:5px;justify-content:center;margin-bottom:12px">
+        ${[2,5,10,15,20].map(m=>`<button onclick="cronoDefinir(${m})" style="flex:1;padding:5px 0;border-radius:7px;border:1px solid ${CRONO.minutos===m?'var(--gold)':'var(--border)'};background:${CRONO.minutos===m?'rgba(240,180,41,.14)':'var(--bg3)'};color:${CRONO.minutos===m?'var(--gold)':'var(--muted2)'};font-size:11px;font-weight:700;cursor:pointer">${m}</button>`).join('')}
+      </div>
+      <button onclick="cronoIniciar()" style="width:100%;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;font-family:'Orbitron',monospace;font-weight:900;font-size:13px;letter-spacing:1px;cursor:pointer">▶ INICIAR</button>`;
+    return;
+  }
+
+  // ── Tela de contagem ──
+  corpo.innerHTML = `
+    <div id="crono-display" style="text-align:center;font-family:'Orbitron',monospace;font-size:42px;font-weight:900;color:${cor};line-height:1;margin-bottom:4px;${acabou?'animation:cronoPisca .7s infinite':''}">${cronoFmt(ms)}</div>
+    <div style="text-align:center;font-size:10.5px;color:var(--muted);margin-bottom:12px">
+      ${acabou ? '⏰ Tempo esgotado!' : CRONO.pausado ? '⏸ Pausado' : 'de ' + cronoFmt(CRONO.minutos*60000)}
+    </div>
+    <div style="display:flex;gap:6px">
+      ${acabou ? '' : `<button onclick="cronoPausar()" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">${CRONO.pausado?'▶ Retomar':'⏸ Pausar'}</button>`}
+      <button onclick="cronoReiniciar()" style="${acabou?'flex:1':'flex:0 0 auto'};padding:9px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);font-size:12px;font-weight:700;cursor:pointer">🔄 ${acabou?'Novo tempo':''}</button>
+    </div>`;
+}
+
+function cronoAjustar(delta){
+  CRONO.minutos = Math.max(CRONO_MIN, Math.min(CRONO_MAX, CRONO.minutos + delta));
+  cronoPintar();
+}
+
+function cronoDefinir(m){
+  CRONO.minutos = m;
+  cronoPintar();
+}
+
+function cronoIniciar(){
+  CRONO.rodando = true;
+  CRONO.pausado = false;
+  CRONO.acabou = false;
+  CRONO.fimEm = Date.now() + CRONO.minutos * 60000;
+  cronoLigarTick();
+  cronoPintar();
+}
+
+function cronoLigarTick(){
+  if(CRONO.intervalo) clearInterval(CRONO.intervalo);
+  // 250ms deixa a virada do segundo suave sem pesar
+  CRONO.intervalo = setInterval(() => {
+    if(!CRONO.rodando || CRONO.pausado) return;
+    const ms = Math.max(0, CRONO.fimEm - Date.now());
+    const disp = document.getElementById('crono-display');
+    if(disp) disp.textContent = cronoFmt(ms);
+    if(ms <= 0 && !CRONO.acabou) cronoZerou();
+    else if(disp && ms <= 30000) disp.style.color = 'var(--red2)';
+  }, 250);
+}
+
+function cronoZerou(){
+  CRONO.acabou = true;
+  CRONO.rodando = false;
+  if(CRONO.intervalo){ clearInterval(CRONO.intervalo); CRONO.intervalo = null; }
+  cronoPintar();
+  cronoBipe();
+  // Bipe repetido a cada 5s ate o professor fechar (ou reiniciar).
+  if(CRONO.bipeIntervalo) clearInterval(CRONO.bipeIntervalo);
+  CRONO.bipeIntervalo = setInterval(() => {
+    if(!document.getElementById('crono-janela') || !CRONO.acabou){
+      clearInterval(CRONO.bipeIntervalo); CRONO.bipeIntervalo = null; return;
+    }
+    cronoBipe();
+  }, 5000);
+  if(typeof showNotif === 'function') showNotif('⏰ Tempo esgotado!');
+}
+
+function cronoPausar(){
+  if(!CRONO.rodando && !CRONO.pausado) return;
+  if(CRONO.pausado){
+    // retomar: recalcula o fim a partir do que sobrou
+    CRONO.fimEm = Date.now() + CRONO.restanteMs;
+    CRONO.pausado = false;
+    CRONO.rodando = true;
+    cronoLigarTick();
+  } else {
+    CRONO.restanteMs = Math.max(0, CRONO.fimEm - Date.now());
+    CRONO.pausado = true;
+  }
+  cronoPintar();
+}
+
+function cronoReiniciar(){
+  if(CRONO.intervalo){ clearInterval(CRONO.intervalo); CRONO.intervalo = null; }
+  if(CRONO.bipeIntervalo){ clearInterval(CRONO.bipeIntervalo); CRONO.bipeIntervalo = null; }
+  CRONO.rodando = false;
+  CRONO.pausado = false;
+  CRONO.acabou = false;
+  CRONO.restanteMs = 0;
+  cronoPintar();
+}
+
+// So esta funcao fecha a janela — nenhum re-render da pagina a remove.
+function fecharCronometro(){
+  if(CRONO.intervalo){ clearInterval(CRONO.intervalo); CRONO.intervalo = null; }
+  if(CRONO.bipeIntervalo){ clearInterval(CRONO.bipeIntervalo); CRONO.bipeIntervalo = null; }
+  CRONO.rodando = false;
+  CRONO.pausado = false;
+  CRONO.acabou = false;
+  document.getElementById('crono-janela')?.remove();
+}
+
+// Se a janela for redimensionada, traz o cronometro de volta para dentro da tela.
+window.addEventListener('resize', () => {
+  const j = document.getElementById('crono-janela');
+  if(!j) return;
+  const maxX = window.innerWidth - j.offsetWidth - 4;
+  const maxY = window.innerHeight - 44;
+  const nx = Math.max(4, Math.min(maxX, parseInt(j.style.left,10) || 0));
+  const ny = Math.max(4, Math.min(maxY, parseInt(j.style.top,10) || 0));
+  j.style.left = nx + 'px'; j.style.top = ny + 'px';
+  CRONO.pos.x = nx; CRONO.pos.y = ny;
+});
+
 // ==============================
 // SORTEADOR DE CHAMADA FRIA
 // ==============================
@@ -8603,6 +8886,7 @@ function renderAulaTab(){
         <button class="btn btn-sm" onclick="setCTtab('horario')">🗓️ Configurar grade de horário</button>
         <button class="btn btn-sm" onclick="openResetAura()" style="border-color:rgba(229,62,62,.3);color:var(--red2)">🔄 Zerar / Resetar Aura</button>
         <button class="btn btn-sm" onclick="openSorteador()" style="border-color:rgba(124,92,252,.3);color:var(--purple2)">🎲 Sortear (chamada fria)</button>
+        <button class="btn btn-sm" onclick="abrirCronometro()" style="border-color:rgba(240,180,41,.35);color:var(--gold)">⏱️ Cronômetro</button>
         ${!aulaInfo?'<span style="font-size:11px;color:var(--muted);margin-left:12px">Nenhuma aula detectada agora nesta turma</span>':''}
       </div>
     </div>`;
