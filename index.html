@@ -341,7 +341,7 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 .chat-box.calvao-fs .chat-head{flex:0 0 auto;}
 .chat-box.calvao-fs .chat-msgs{flex:1 1 auto;min-height:0 !important;}
 .chat-box.calvao-fs .chat-in-row{flex:0 0 auto;}
-body.calvao-fs-on .topbar,body.calvao-fs-on .aluno-side,body.calvao-fs-on .aluno-tabs,body.calvao-fs-on .a-hamburger-float,body.calvao-fs-on .a-loja-float,body.calvao-fs-on .copa-badge{display:none !important;}
+body.calvao-fs-on .topbar,body.calvao-fs-on .aluno-side,body.calvao-fs-on .aluno-tabs,body.calvao-fs-on .a-hamburger-float,body.calvao-fs-on .a-loja-float{display:none !important;}
 body.calvao-fs-on .aluno-main.a-content{padding:0 !important;}
 .chat-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
 .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}
@@ -439,10 +439,16 @@ body.calvao-fs-on .aluno-main.a-content{padding:0 !important;}
 .copa-flag span{display:block;width:28px;height:5px;border-radius:1px;}
 .copa-text{font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:#c9a227;letter-spacing:.8px;text-transform:uppercase;line-height:1.3;}
 .copa-sub{font-size:8px;color:rgba(255,255,255,.45);font-family:'Syne',sans-serif;letter-spacing:.3px;margin-top:1px;}
+.copa-badge-side{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.1);border-radius:var(--r);padding:9px 12px;margin-top:10px;}
+/* Relógio do topo — data, dia da semana e hora, sempre visível */
+.topbar-clock{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;margin-right:6px}
+.topbar-clock .tc-dia{font-size:11px;font-weight:700;color:var(--text);text-transform:capitalize}
+.topbar-clock .tc-hora{font-size:10px;color:var(--muted2);font-family:'Orbitron',monospace}
+@media (max-width:600px){ .topbar-clock{display:none} }
 .aluno-tabs{display:flex;gap:2px;padding:12px 16px 0;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
 .a-tab{padding:8px 16px;border-radius:8px 8px 0 0;font-size:13px;cursor:pointer;color:var(--muted);border:1px solid transparent;border-bottom:none;transition:.12s;font-weight:600;}
 .a-tab.active{background:var(--bg);border-color:var(--border);color:var(--text);}
-.aluno-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px;min-height:0;-webkit-overflow-scrolling:touch;}
+.aluno-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 20px 100px;min-height:0;-webkit-overflow-scrolling:touch;}
 /* PATCH 9.6 — garantir rolagem em todas as abas do aluno */
 .aluno-content > *{max-width:100%;}
 .chat-box{display:flex;flex-direction:column;max-height:65vh;overflow:hidden;}
@@ -1098,6 +1104,7 @@ input, textarea, select{ font-size:14px; }
     <div class="trole" id="t-role"></div>
     <div class="tuser" id="t-user"></div>
     <div id="topbar-timer" style="display:none;flex:1;justify-content:center;align-items:center;gap:8px;font-family:'Orbitron',monospace"></div>
+    <div class="topbar-clock" id="topbar-clock"></div>
     <div class="tr">
       <div style="display:flex;align-items:center;gap:3px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:2px">
         <button onclick="changeFontSize(-1)" title="Diminuir fonte" style="background:none;border:none;cursor:pointer;color:var(--muted2);font-size:13px;padding:3px 7px;border-radius:5px;font-family:'Syne',sans-serif;font-weight:600;line-height:1" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='none'">A−</button>
@@ -2973,6 +2980,7 @@ function startApp(){
   }
   const disc=currentProf?.disciplina||'FARME AURA';
   document.querySelector('.tl').textContent=disc;
+  iniciarRelogioTopbar();
   document.getElementById('t-role').textContent=CR==='professor'?'PROFESSOR':'ALUNO';
   document.getElementById('t-role').className='trole '+(CR==='professor'?'prof':'aluno');
   const tu = document.getElementById('t-user');
@@ -4136,6 +4144,26 @@ async function checarJanelaFarme(silencioso){
   }catch(e){ /* offline: nao trava o aluno por falha de rede */ }
   finally{ _janelaChecando = false; }
   return FARME_ACESSO;
+}
+
+// v13.1 — relógio do topo: data, dia da semana e hora, sempre visíveis,
+// pra não precisar abrir nenhum painel específico pra saber "hoje é o quê".
+// É só visual (usa o relógio do aparelho); quem decide o bloqueio de
+// verdade continua sendo o servidor, em checarJanela() no backend.
+let _relogioTopbarTimer = null;
+function atualizarRelogioTopbar(){
+  const el = document.getElementById('topbar-clock');
+  if(!el) return;
+  const agora = new Date();
+  let dia = agora.toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'2-digit'});
+  dia = dia.replace('.', '');
+  const hora = agora.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  el.innerHTML = `<span class="tc-dia">${dia}</span><span class="tc-hora">${hora}</span>`;
+}
+function iniciarRelogioTopbar(){
+  atualizarRelogioTopbar();
+  if(_relogioTopbarTimer) clearInterval(_relogioTopbarTimer);
+  _relogioTopbarTimer = setInterval(atualizarRelogioTopbar, 30000);
 }
 
 function iniciarVigiaJanela(){
@@ -8390,6 +8418,7 @@ function aulaPick(a){
       }).join('')}</div>`
     : '<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">sem EGOs</div>';
 
+  const libManual = QUEST_SALDOS[a.id]?.lojaLiberadaManual;
   const expandedHtml = expanded ? `
     <div style="background:rgba(124,92,252,.06);border-top:1px solid var(--border);padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
       <button class="btn btn-sm" onclick="event.stopPropagation();openPenalty('${a.login}','${a.nome.replace(/'/g,"\'")}')" style="background:rgba(229,62,62,.1);border-color:rgba(229,62,62,.3);color:var(--red2)">⚠️ Aplicar Penalidade</button>
@@ -8397,6 +8426,7 @@ function aulaPick(a){
       <button class="btn btn-sm" onclick="event.stopPropagation();openAlunoLog('${a.login}')" style="background:rgba(14,164,114,.1);border-color:rgba(14,164,114,.3);color:var(--green2)">📋 Log de XP</button>
       <button class="btn btn-sm" onclick="event.stopPropagation();openAlunoCalvao('${a.login}')" style="background:rgba(240,180,41,.1);border-color:rgba(240,180,41,.3);color:var(--gold)">🤖 Calvão de crIA</button>
       <button class="btn btn-sm" onclick="event.stopPropagation();openDarQuest('${a.id}','${a.nome.replace(/'/g,"\\'")}')" style="background:rgba(124,92,252,.1);border-color:rgba(124,92,252,.35);color:var(--purple2)">🏅 Dar Quest</button>
+      <button class="btn btn-sm" onclick="event.stopPropagation();toggleLiberarLoja('${a.id}',${libManual?'false':'true'})" style="background:${libManual?'rgba(14,164,114,.1)':'rgba(240,180,41,.1)'};border-color:${libManual?'rgba(14,164,114,.3)':'rgba(240,180,41,.3)'};color:${libManual?'var(--green2)':'var(--gold)'}">${libManual?'🔓 Loja liberada — tirar':'🔒 Liberar loja'}</button>
     </div>
   ` : '';
 
@@ -9158,14 +9188,6 @@ function renderAlunoApp(){
         ${abasDisciplinaHtml()}
         <!-- BLOCO 5 — Cenário de fundo que reflete a ERA atual do aluno -->
         ${fundoDocesHtml()}
-        <!-- Badge da Era atual -->
-        <div class="copa-badge" style="border-color:${COLOR_ERA[eraAtual]}">
-          <div style="font-size:26px">${ERA_EMOJI[eraAtual]}</div>
-          <div>
-            <div class="copa-text" style="color:${COLOR_ERA[eraAtual]}">${STATUS_ERA[eraAtual]}</div>
-            <div class="copa-sub">${ERA_NOME[eraAtual]}</div>
-          </div>
-        </div>
         <button class="a-hamburger-float" onclick="toggleASidebarMobile()">☰ Menu</button>
         <button class="a-loja-float" id="a-loja-float" onclick="abrirLojaDireto()">🛍️ Loja de Prêmios</button>
         <div class="aluno-tabs" style="display:flex;align-items:center;gap:6px">
@@ -9301,6 +9323,16 @@ async function montarMascoteFlutuante(){
   btnVoz.textContent = '🎚️';
   wrap.appendChild(btnVoz);
 
+  // v13.1 — botão explícito pra abrir a mensagem do mascote: antes só dava
+  // pra clicar na própria foto, sem nada indicando que ela é clicável.
+  const btnMsg = document.createElement('button');
+  btnMsg.id = 'calvao-menu-btn';
+  btnMsg.title = 'Ver mensagem do Calvão';
+  btnMsg.onclick = novaMsgCalvao;
+  btnMsg.style.cssText = 'background:rgba(13,10,31,.8);border:2px solid #0d0a1f;border-radius:50%;width:26px;height:26px;font-size:12px;cursor:pointer;padding:0;color:#fff;margin-top:4px';
+  btnMsg.textContent = '💬';
+  wrap.appendChild(btnMsg);
+
   if(!document.getElementById('mascote-keyframes')){
     const st = document.createElement('style');
     st.id = 'mascote-keyframes';
@@ -9312,10 +9344,15 @@ async function montarMascoteFlutuante(){
 }
 
 // Fecha o mascote inteiro e mostra um ícone pequeno para reabrir (no lugar do antigo botão de som)
+// v13.1 — o X também abre a coluna lateral (aura, personagem, "ativar
+// avisos do professor", Loja de Prêmios etc.): pedido dele foi que, já
+// que o aluno estava clicando ali de qualquer jeito, esse clique leve pra
+// algo útil em vez de só fechar o mascote e não sobrar nada no lugar.
 function fecharMascoteCalvao(){
   const m = document.getElementById('calvao-mascote');
   if(m) m.remove();
   if(window.speechSynthesis) window.speechSynthesis.cancel();
+  if(typeof toggleASidebarMobile === 'function') toggleASidebarMobile(true);
   if(document.getElementById('calvao-reabrir')) return;
   const btn = document.createElement('button');
   btn.id = 'calvao-reabrir';
@@ -9620,6 +9657,7 @@ function setATab(t){
 function renderASide(){
   const el=document.getElementById('a-side'); if(!el)return;
   const a=CU;
+  const eraAtual=eraDoAluno(a);
   const c=auraColor(a);
   const turma=DB.turmas.find(t=>t.id===CTid);
   const hasBoost=a.boostUntil&&Date.now()<a.boostUntil;
@@ -9644,6 +9682,17 @@ function renderASide(){
         </div>`; })()}
       <div class="bar-track" style="margin-top:12px"><div class="bar-fill" style="width:${auraPct}%;background:${c}"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:4px"><span style="font-size:10px;color:var(--muted)">0</span><span style="font-size:10px;color:var(--muted)">100</span></div>
+    </div>
+
+    <!-- Badge da Era atual — v13.1: morava flutuando por cima do conteúdo
+         (atrapalhava o Calvão em tela cheia); agora vive aqui na coluna
+         lateral, que já some sozinha no modo tela cheia. -->
+    <div class="copa-badge-side" style="border-color:${COLOR_ERA[eraAtual]}">
+      <div style="font-size:22px">${ERA_EMOJI[eraAtual]}</div>
+      <div>
+        <div class="copa-text" style="color:${COLOR_ERA[eraAtual]}">${STATUS_ERA[eraAtual]}</div>
+        <div class="copa-sub">${ERA_NOME[eraAtual]}</div>
+      </div>
     </div>
 
     <!-- PERSONAGEM -->
@@ -9891,6 +9940,11 @@ function renderQuestAlunoInner(){
   if(!_qa) return `<div class="empty">Nada por aqui ainda.</div>`;
 
   const pend = (_qa.eventos||[]).filter(e=>e.status==='pendente').length;
+  // v13.1 — pontos já gastos num resgate que ainda espera o professor
+  // entregar: já saíram do "disponível pra gastar" (o servidor desconta
+  // na hora da compra), mas ainda não estão de fato "consumidos" — só
+  // quando o professor marca entregue é que somem pra sempre.
+  const reservado = (_qa.compras||[]).filter(c=>c.status==='pendente').reduce((s,c)=>s+(c.pontos_gastos||0),0);
 
   const topo = `
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
@@ -9903,7 +9957,14 @@ function renderQuestAlunoInner(){
         <div style="font-family:'Orbitron',monospace;font-size:30px;font-weight:900;color:var(--gold);line-height:1.2">${_qa.conquistadas}</div>
         <div style="font-size:10px;color:var(--muted2);margin-top:2px">esse número nunca cai</div>
       </div>
+      ${reservado>0?`<div style="flex:1;min-width:150px;background:rgba(240,180,41,.08);border:1px solid rgba(240,180,41,.3);border-radius:var(--r2);padding:14px 16px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Esperando entrega</div>
+        <div style="font-family:'Orbitron',monospace;font-size:30px;font-weight:900;color:var(--gold);line-height:1.2">${reservado}</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:2px">já saiu do saldo, some de vez quando entregar</div>
+      </div>`:''}
     </div>
+    ${_qa.lojaLiberadaManual?`<div style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.35);border-radius:var(--r);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--green2)">
+      🔓 O professor liberou a loja pra você, mesmo sem tarefa em dia.</div>`:''}
     ${pend>0?`<div style="background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.35);border-radius:var(--r);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--gold)">
       ⏳ Você tem <strong>${pend}</strong> quest(s) esperando o professor aprovar.</div>`:''}`;
 
@@ -9940,7 +10001,7 @@ function renderQuestAlunoInner(){
   } else {
     const cards = prods.map(p=>{
       const podeSaldo = _qa.saldo >= p.custo_pontos;
-      const travadoTarefa = !!_qa.exigeTarefas && !(_qa.tarefas && _qa.tarefas.apto);
+      const travadoTarefa = !!_qa.exigeTarefas && !(_qa.tarefas && _qa.tarefas.apto) && !_qa.lojaLiberadaManual;
       const esgotado = p.restante!=null && p.restante<=0;
       const pode = podeSaldo && _qa.lojaAberta && !travadoTarefa && !esgotado;
       const comprando = _qaComprando === p.id;
@@ -12923,9 +12984,30 @@ function renderLojaInner(){
 
   const aba=(id,l)=>`<button class="btn btn-sm" onclick="setLojaAba('${id}')" style="${_lojaAba===id?'border-color:var(--purple2);color:var(--purple2);font-weight:700':''}">${l}</button>`;
   const abas = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    ${aba('produtos','🎁 Prêmios')}${aba('entregas',`📦 Entregar${pendentes?` (${pendentes})`:''}`)}</div>`;
+    ${aba('produtos','🎁 Prêmios')}${aba('entregas',`📦 Entregar${pendentes?` (${pendentes})`:''}`)}${aba('historico','📜 Histórico')}</div>`;
 
-  return cab + controle + abas + (_lojaAba==='produtos' ? renderLojaProdutos() : renderLojaEntregas());
+  const abaConteudo = _lojaAba==='produtos' ? renderLojaProdutos() : (_lojaAba==='entregas' ? renderLojaEntregas() : renderLojaHistorico());
+  return cab + controle + abas + abaConteudo;
+}
+
+function renderLojaHistorico(){
+  const todas = _loja.compras||[];
+  const feitas = todas.filter(x=>x.status==='entregue'||x.status==='cancelado')
+    .sort((a,b)=> new Date(b.criado_em) - new Date(a.criado_em));
+  const nomeProd = {}; (_loja.produtos||[]).forEach(p=>{ nomeProd[p.id]=p.nome; });
+  if(!feitas.length) return `<div class="empty">Ainda não há entregas ou cancelamentos no histórico.</div>`;
+  const linhas = feitas.map(x=>{
+    const entregue = x.status==='entregue';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+    <span style="font-size:16px">${entregue?'✅':'↩️'}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600">${x.alunoNome} <span style="font-size:11px;color:var(--muted);font-weight:400">· ${x.turmaNome}</span></div>
+      <div style="font-size:11px;color:var(--muted2);margin-top:2px">${nomeProd[x.produto_id]||'Prêmio'} · 🏅 ${x.pontos_gastos} · ${entregue?'entregue':'cancelado (pontos devolvidos)'}</div>
+    </div>
+    <div style="font-size:10.5px;color:var(--muted);white-space:nowrap">${new Date(x.criado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})}</div>
+  </div>`;
+  }).join('');
+  return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden">${linhas}</div>`;
 }
 
 function renderLojaProdutos(){
@@ -12973,14 +13055,22 @@ function renderLojaEntregas(){
       <button class="btn btn-sm" onclick="decidirEntrega('entregar')" ${sel?'':'disabled'} style="border-color:rgba(74,222,128,.5);color:var(--green2);font-weight:700;${sel?'':'opacity:.45;cursor:not-allowed'}">✅ Marcar entregue</button>
       <button class="btn btn-sm" onclick="decidirEntrega('cancelar')" ${sel?'':'disabled'} style="border-color:rgba(229,62,62,.4);color:var(--red2);${sel?'':'opacity:.45;cursor:not-allowed'}">↩️ Cancelar (devolve os pontos)</button>
     </div></div>`;
-  const linhas = pend.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);${_lojaSel.has(x.id)?'background:rgba(124,92,252,.07)':''}">
+  const tPorAluno = _loja.tarefasPorAluno || {};
+  const linhas = pend.map(x=>{
+    const t = tPorAluno[x.aluno_id];
+    const tarefaHtml = t
+      ? `<div style="font-size:10.5px;margin-top:2px;color:${t.apto?'var(--green2)':'var(--red2)'}">${t.apto?'✅':'⚠️'} tarefas: ${t.feitas??'?'}/${t.previstas??'?'}${t.soma!=null?` · soma ${t.soma}`:''}</div>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);${_lojaSel.has(x.id)?'background:rgba(124,92,252,.07)':''}">
     <input type="checkbox" ${_lojaSel.has(x.id)?'checked':''} onchange="toggleLojaSel('${x.id}')" style="width:17px;height:17px;cursor:pointer;flex-shrink:0">
     <div style="flex:1;min-width:0">
       <div style="font-size:13px;font-weight:600">${x.alunoNome} <span style="font-size:11px;color:var(--muted);font-weight:400">· ${x.turmaNome}</span></div>
       <div style="font-size:11px;color:var(--muted2);margin-top:2px">${nomeProd[x.produto_id]||'Prêmio'} · 🏅 ${x.pontos_gastos}</div>
+      ${tarefaHtml}
     </div>
     <div style="font-size:10.5px;color:var(--muted);white-space:nowrap">${new Date(x.criado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</div>
-  </div>`).join('');
+  </div>`;
+  }).join('');
   return barra + `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden">${linhas}</div>`;
 }
 
@@ -13044,7 +13134,7 @@ async function abrirLojaPeriodo(){
   try{
     const t = await apiFetch('/api/db?action=tarefas-listar', {});
     refs = t.referencias || [];
-  }catch(e){ /* sem tarefas importadas: a pergunta nem aparece */ }
+  }catch(e){ /* sem tarefas importadas: cai no aviso abaixo */ }
 
   if(refs.length){
     exigeTarefas = confirm(
@@ -13053,6 +13143,15 @@ async function abrirLojaPeriodo(){
       `Cancelar = qualquer aluno com pontos pode resgatar.\n\n` +
       `Os pontos de quest continuam sendo acumulados de qualquer jeito — a trava só segura o resgate.`);
     if(exigeTarefas) referenciaTarefas = refs[0];
+  } else {
+    // v13.1 — nenhuma tarefa foi importada ainda: antes isso abria a loja
+    // liberada pra todo mundo, sem avisar nada. Agora ele escolhe, sabendo.
+    const abrirMesmoAssim = confirm(
+      `⚠️ Nenhuma tarefa da SEDUC foi importada ainda.\n\n` +
+      `Se abrir agora, a loja libera pra TODO MUNDO resgatar, sem exigir tarefa nenhuma.\n\n` +
+      `OK = abrir mesmo assim, sem trava de tarefas.\n` +
+      `Cancelar = não abrir agora (importe as tarefas primeiro, em 📋 Tarefas SEDUC).`);
+    if(!abrirMesmoAssim) return;
   }
 
   try{
@@ -13354,7 +13453,29 @@ async function carregarQuestSaldos(){
 function questChipAluno(a){
   const s = QUEST_SALDOS[a.id];
   if(!s || !s.conquistadas) return '';
-  return `<span title="Quests conquistadas / saldo disponível na loja" style="color:var(--purple2);margin-left:6px;font-size:10px;font-weight:700">🏅 ${s.conquistadas}${s.saldo!==s.conquistadas?`/${s.saldo}`:''}</span>`;
+  const base = `<span title="Quests conquistadas / saldo disponível na loja" style="color:var(--purple2);margin-left:6px;font-size:10px;font-weight:700">🏅 ${s.conquistadas}${s.saldo!==s.conquistadas?`/${s.saldo}`:''}</span>`;
+  // v13.1 — só mostra o cadeado quando existe um período aberto exigindo
+  // tarefas: fora disso, é igual pra todo mundo e não vale poluir a linha.
+  let lojaBadge = '';
+  if(s.lojaLiberadaManual){
+    lojaBadge = `<span title="Loja liberada manualmente pelo professor" style="color:var(--green2);margin-left:5px;font-size:10px;font-weight:700">🔓</span>`;
+  } else if(s.tarefasApto === true){
+    lojaBadge = `<span title="Tarefas em dia — pode resgatar" style="color:var(--green2);margin-left:5px;font-size:10px;font-weight:700">🟢</span>`;
+  } else if(s.tarefasApto === false){
+    lojaBadge = `<span title="Tarefas pendentes — loja travada pra ele" style="color:var(--red2);margin-left:5px;font-size:10px;font-weight:700">🔒</span>`;
+  }
+  return base + lojaBadge;
+}
+
+// v13.1 — liga/desliga a liberação manual da loja pra este aluno,
+// direto do Painel Aula (independe das tarefas dele).
+async function toggleLiberarLoja(id, liberarAgora){
+  try{
+    await apiFetch('/api/db?action=loja-liberar-aluno', {id, liberar: liberarAgora});
+    showNotif(liberarAgora ? '🔓 Loja liberada pra ele(a).' : '🔒 Liberação manual removida.');
+    await carregarQuestSaldos();
+    renderTurmaView();
+  }catch(e){ showNotif('⚠️ '+e.message); }
 }
 
 function openResetAura(){
