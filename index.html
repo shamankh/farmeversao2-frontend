@@ -419,6 +419,13 @@ body.calvao-fs-on .aluno-main.a-content{padding:0 !important;}
 .a-hamburger-float{display:inline-flex;align-self:flex-start;flex:0 0 auto;align-items:center;gap:6px;background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;padding:12px 18px;border-radius:var(--r);font-family:'Orbitron',monospace;font-weight:700;font-size:14px;cursor:pointer;margin:12px;box-shadow:0 4px 14px rgba(124,92,252,.35);}
 /* No PC, esconder a coluna é só tirar ela do lugar — o conteúdo ocupa tudo. */
 .a-wrap.side-oculta .aluno-side{display:none !important;}
+/* v13.2 — BUG CORRIGIDO: o fundo de doces (.doce-bg / .login-doces-float) é
+   position:absolute, e por isso era pintado POR CIMA de tudo que não tem
+   posicionamento — foi o que engoliu o botão "☰ Menu" (ele existia, tinha
+   tamanho e respondia a clique no lugar certo, mas ficava atrás do fundo e
+   ninguém via). Fundo vai pro fim da pilha; o conteúdo do aluno sobe. */
+.aluno-main > .doce-bg,.aluno-main > .login-doces-float{z-index:0;}
+.a-hamburger-float,.aluno-tabs,.aluno-content{position:relative;z-index:1;}
 /* v13.2 — a Loja saiu do botão flutuante (tapava o conteúdo) e virou um
    card dentro da própria coluna lateral, junto do resto do painel. */
 .a-loja-side{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;background:linear-gradient(135deg,var(--gold),#ff8fab);color:var(--ink);border:2.5px solid var(--ink);border-radius:999px;padding:11px 14px;font-family:'Orbitron',monospace;font-weight:800;font-size:12px;cursor:pointer;box-shadow:3px 3px 0 var(--ink);letter-spacing:.3px;}
@@ -6222,7 +6229,11 @@ function renderRankingGlobalContent(){
           style="flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none;padding:2px"/>
         ${buscaAluno?`<button onclick="window._feBuscaAluno='';const el=document.getElementById('a-content');if(el)el.innerHTML=renderRankingGlobalContent();" style="background:none;border:1px solid var(--border2);border-radius:var(--r);color:var(--muted2);padding:3px 8px;cursor:pointer;font-size:11px">✕</button><span style="font-size:10.5px;color:var(--purple2);font-weight:700">${listaFiltrada.length}</span>`:''}
       </div>
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden">
+      <!-- v13.2 — era overflow:hidden: com o Farme Elegante ou a votação
+           ligados a tabela fica mais larga que a tela do celular e as colunas
+           da direita (o botão "Enviar 💜" / "Votar 🏅") eram CORTADAS, sem
+           barra de rolagem nenhuma — o aluno não tinha como chegar nelas. -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow-x:auto;-webkit-overflow-scrolling:touch">
         <table class="stbl">
           <thead><tr><th style="width:38px">#</th><th>Aluno</th><th style="text-align:right">🏅</th><th style="text-align:right">Aura</th><th style="text-align:center">💜</th>${ativo?'<th></th>':''}${votacao?'<th></th>':''}</tr></thead>
           <tbody>
@@ -13030,8 +13041,8 @@ function renderLojaInner(){
           <div style="font-size:12px;color:var(--muted2);margin-top:2px">
             ${aberto
               ? (aberto.exige_tarefas
-                  ? `📋 Só resgata quem está com as <strong>tarefas em dia</strong> (semana ${aberto.referencia_tarefas||'—'}). Feche quando terminar o período.`
-                  : 'Os alunos podem resgatar prêmios agora. Feche quando terminar o período de troca.')
+                  ? `📋 Só resgata quem está com as <strong>tarefas em dia</strong>${aberto.referencia_tarefas?` (semana ${aberto.referencia_tarefas})`:' — vale sempre o <strong>último arquivo importado</strong>'}, ou quem você liberar na mão por 24h no Painel Aula.`
+                  : '⚠️ Loja LIVRE: qualquer aluno com pontos resgata, sem exigir tarefa nenhuma.')
               : 'Os alunos veem os prêmios e o próprio saldo, mas não conseguem resgatar enquanto estiver fechada.'}
           </div>
         </div>
@@ -13039,6 +13050,20 @@ function renderLojaInner(){
           ? `<button class="btn btn-sm" onclick="fecharLojaPeriodo()" style="border-color:rgba(229,62,62,.4);color:var(--red2)">🔒 Fechar loja</button>`
           : `<button class="btn btn-sm" onclick="abrirLojaPeriodo()" style="border-color:rgba(74,222,128,.5);color:var(--green2);font-weight:700">🟢 Abrir loja</button>`}
       </div>
+      ${aberto ? `
+      <!-- v13.2 — dá pra ligar/desligar a trava das tarefas com a loja aberta,
+           sem fechar e reabrir o período. -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--muted2);flex:1;min-width:190px">
+          ${aberto.exige_tarefas
+            ? 'A trava das tarefas está <strong style="color:var(--green2)">LIGADA</strong>. Quem não estiver em dia vê a loja mas não resgata.'
+            : 'A trava das tarefas está <strong style="color:var(--gold)">DESLIGADA</strong>. Todo mundo com pontos consegue resgatar.'}
+        </span>
+        <button class="btn btn-sm" onclick="alternarTravaTarefas(${aberto.exige_tarefas?'false':'true'})"
+          style="border-color:${aberto.exige_tarefas?'rgba(240,180,41,.45)':'rgba(74,222,128,.5)'};color:${aberto.exige_tarefas?'var(--gold)':'var(--green2)'};font-weight:700">
+          ${aberto.exige_tarefas?'🔓 Desligar a trava':'📋 Travar nas tarefas'}
+        </button>
+      </div>` : ''}
     </div>`;
 
   const aba=(id,l)=>`<button class="btn btn-sm" onclick="setLojaAba('${id}')" style="${_lojaAba===id?'border-color:var(--purple2);color:var(--purple2);font-weight:700':''}">${l}</button>`;
@@ -13187,38 +13212,41 @@ async function abrirLojaPeriodo(){
   const nome = prompt('Nome deste período de resgate (só pra você se organizar):', 'Resgate do bimestre');
   if(nome === null) return;
 
-  // v13 — pergunta se este resgate exige as tarefas da SEDUC em dia.
-  let exigeTarefas = false, referenciaTarefas = null;
-  let refs = [];
-  try{
-    const t = await apiFetch('/api/db?action=tarefas-listar', {});
-    refs = t.referencias || [];
-  }catch(e){ /* sem tarefas importadas: cai no aviso abaixo */ }
-
-  if(refs.length){
-    exigeTarefas = confirm(
-      `Exigir as TAREFAS em dia para resgatar?\n\n` +
-      `OK = só resgata quem bateu a nota mínima nas tarefas (semana ${refs[0]}).\n` +
-      `Cancelar = qualquer aluno com pontos pode resgatar.\n\n` +
-      `Os pontos de quest continuam sendo acumulados de qualquer jeito — a trava só segura o resgate.`);
-    if(exigeTarefas) referenciaTarefas = refs[0];
-  } else {
-    // v13.1 — nenhuma tarefa foi importada ainda: antes isso abria a loja
-    // liberada pra todo mundo, sem avisar nada. Agora ele escolhe, sabendo.
-    const abrirMesmoAssim = confirm(
-      `⚠️ Nenhuma tarefa da SEDUC foi importada ainda.\n\n` +
-      `Se abrir agora, a loja libera pra TODO MUNDO resgatar, sem exigir tarefa nenhuma.\n\n` +
-      `OK = abrir mesmo assim, sem trava de tarefas.\n` +
-      `Cancelar = não abrir agora (importe as tarefas primeiro, em 📋 Tarefas SEDUC).`);
-    if(!abrirMesmoAssim) return;
-  }
+  // v13.2 — a loja abre TRAVADA por padrão: aberta pra todo mundo VER, mas
+  // resgatando só quem está com as tarefas em dia (ou com a liberação de 24h
+  // do professor). A trava não fica presa a uma semana específica — ela segue
+  // sempre a ÚLTIMA importação de tarefas, então trocar o arquivo já atualiza
+  // quem pode e quem não pode comprar, sem mexer na loja.
+  const exigeTarefas = confirm(
+    `Abrir a loja TRAVADA nas tarefas?\n\n` +
+    `OK (recomendado) = a loja abre, mas só resgata quem está com as tarefas\n` +
+    `em dia — ou quem você liberar na mão pelo Painel Aula (24h).\n` +
+    `A trava usa sempre o último arquivo de tarefas importado: quando você\n` +
+    `subir um novo, quem pode comprar se atualiza sozinho.\n\n` +
+    `Cancelar = loja livre, qualquer aluno com pontos resgata.\n\n` +
+    `Os pontos de quest continuam sendo acumulados dos dois jeitos.`);
 
   try{
-    await apiFetch('/api/db?action=loja-periodo', {op:'abrir', nome, exigeTarefas, referenciaTarefas});
+    // referenciaTarefas vai vazio de propósito = "sempre a última importada"
+    await apiFetch('/api/db?action=loja-periodo', {op:'abrir', nome, exigeTarefas, referenciaTarefas:null});
     showNotif(exigeTarefas
-      ? `🟢 Loja aberta exigindo as tarefas da semana ${referenciaTarefas}.`
-      : '🟢 Loja aberta! Os alunos já podem resgatar.');
+      ? '🟢 Loja aberta e travada nas tarefas. Quem não tem tarefa em dia não resgata.'
+      : '🟢 Loja aberta e LIVRE — qualquer aluno com pontos resgata.');
     await carregarLoja();
+  }catch(e){ showNotif('⚠️ '+e.message); }
+}
+
+// v13.2 — liga/desliga a trava das tarefas com a loja JÁ ABERTA, sem precisar
+// fechar e reabrir o período (o que zeraria o período e bagunçaria o histórico).
+async function alternarTravaTarefas(ligar){
+  if(!confirm(ligar
+    ? 'Travar a loja nas tarefas?\n\nA partir de agora só resgata quem está com as tarefas em dia (última importação) ou quem você liberou na mão por 24h.'
+    : 'Destravar a loja?\n\nQualquer aluno com pontos vai poder resgatar, sem exigir tarefa nenhuma.')) return;
+  try{
+    await apiFetch('/api/db?action=loja-periodo', {op:'trava', exigeTarefas:ligar, referenciaTarefas:null});
+    showNotif(ligar ? '📋 Loja travada nas tarefas.' : '🔓 Trava de tarefas desligada.');
+    await carregarLoja();
+    await carregarQuestSaldos();
   }catch(e){ showNotif('⚠️ '+e.message); }
 }
 
