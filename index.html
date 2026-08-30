@@ -116,6 +116,10 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 .fi{display:flex;flex-direction:column;gap:6px;}
 .fl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
 .fin{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;color:var(--text);font-size:13px;font-family:'Syne',sans-serif;outline:none;transition:.15s;}
+/* v13.1 — botao de mostrar/esconder senha no login */
+.senha-wrap{position:relative;}
+.senha-olho{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;padding:4px 6px;line-height:1;opacity:.65;}
+.senha-olho:hover{opacity:1;}
 .fin:focus{border-color:rgba(124,92,252,0.5);box-shadow:0 0 0 2px rgba(124,92,252,0.1);}
 .login-btn{background:var(--purple);border:none;border-radius:var(--r);padding:13px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Orbitron',monospace;letter-spacing:2px;text-transform:uppercase;transition:.15s;width:100%;}
 .login-btn:hover{background:var(--purple2);color:#0a0b0f;}
@@ -329,8 +333,15 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 /* CHAT */
 .chat-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column;height:500px;}
 /* v13.1 — Calvão em tela cheia (mesma ideia das atividades gamificadas, bom pra celular) */
-.chat-box.calvao-fs{position:fixed !important;inset:0 !important;z-index:9500;height:100vh !important;max-height:100vh !important;border-radius:0 !important;margin:0 !important;}
-body.calvao-fs-on .topbar,body.calvao-fs-on .aluno-side,body.calvao-fs-on .aluno-tabs,body.calvao-fs-on .a-hamburger-float,body.calvao-fs-on .a-loja-float{display:none !important;}
+.chat-box.calvao-fs{position:fixed !important;inset:0 !important;z-index:9500;height:100vh !important;max-height:100vh !important;border-radius:0 !important;margin:0 !important;overflow:hidden !important;}
+/* v13.1 — no tela-cheia, header e campo de resposta nunca podem encolher;
+   só o miolo de mensagens (chat-msgs) absorve o espaço e rola por dentro.
+   Sem isso, historico de conversa longo empurrava o campo de resposta
+   pra fora da tela (só dava pra ver dando zoom-out no navegador). */
+.chat-box.calvao-fs .chat-head{flex:0 0 auto;}
+.chat-box.calvao-fs .chat-msgs{flex:1 1 auto;min-height:0 !important;}
+.chat-box.calvao-fs .chat-in-row{flex:0 0 auto;}
+body.calvao-fs-on .topbar,body.calvao-fs-on .aluno-side,body.calvao-fs-on .aluno-tabs,body.calvao-fs-on .a-hamburger-float,body.calvao-fs-on .a-loja-float,body.calvao-fs-on .copa-badge{display:none !important;}
 body.calvao-fs-on .aluno-main.a-content{padding:0 !important;}
 .chat-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
 .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}
@@ -925,6 +936,10 @@ h1,h2,h3,.section-title,.modal-title{font-family:'Fredoka',sans-serif !important
 /* Balão de fala (chat do Calvão na missão) estilo HQ cream */
 .chat-bubble-ai,.msg-ai,.bubble-calvao{background:var(--cream) !important;color:var(--ink) !important;
   border:2.5px solid var(--ink) !important;border-radius:16px !important;box-shadow:3px 3px 0 var(--ink) !important;}
+/* v13.1 — pergunta do Calvão não pode ser selecionada/copiada: é pra ler,
+   não pra colar em outra IA sem ler. Copiar a PRÓPRIA resposta (.msg-user)
+   continua liberado normalmente. */
+.msg-ai .bubble{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;}
 
 /* Botão grande "Começar a Farmar" dourado saltável */
 .btn-farmar,.start-mission-btn{background:var(--gold) !important;color:var(--ink) !important;
@@ -1023,7 +1038,7 @@ input, textarea, select{ font-size:14px; }
     <!-- PAINEL LOGIN PROFESSOR -->
     <div class="login-panel" id="panel-login">
       <div class="fi"><div class="fl">Email</div><input class="fin" id="lu" type="email" placeholder="seu@email.com" autocomplete="off"></div>
-      <div class="fi"><div class="fl">Senha</div><input class="fin" id="lp" type="password" placeholder="sua senha"></div>
+      <div class="fi"><div class="fl">Senha</div><div class="senha-wrap"><input class="fin" id="lp" type="password" placeholder="sua senha" style="padding-right:36px"><button type="button" class="senha-olho" onclick="toggleVerSenha('lp',this)" title="Mostrar/ocultar senha">👁️</button></div></div>
       <div class="login-err" id="lerr" style="display:none">Login ou senha incorretos.</div>
       <button class="login-btn" id="btn-entrar" onclick="doLogin()">ENTRAR</button>
       <div style="text-align:center;margin-top:8px">
@@ -1035,7 +1050,7 @@ input, textarea, select{ font-size:14px; }
     <!-- PAINEL ALUNO LOGIN -->
     <div class="login-panel active" id="panel-aluno">
       <div class="fi"><div class="fl">Login do aluno</div><input class="fin" id="alu" placeholder="ex: 7Achristop" autocomplete="off"></div>
-      <div class="fi"><div class="fl">Senha</div><input class="fin" id="alp" type="password" placeholder="sua senha"></div>
+      <div class="fi"><div class="fl">Senha</div><div class="senha-wrap"><input class="fin" id="alp" type="password" placeholder="sua senha" style="padding-right:36px"><button type="button" class="senha-olho" onclick="toggleVerSenha('alp',this)" title="Mostrar/ocultar senha">👁️</button></div></div>
       <div class="login-err" id="alerr" style="display:none">Login ou senha incorretos.</div>
       <button class="login-btn" id="btn-entrar-aluno" onclick="doLoginAluno()">ENTRAR</button>
       <div class="login-hint">Sua aura te aguarda 🎮</div>
@@ -1806,8 +1821,12 @@ function parseFinalScore(reply){
   return null;
 }
 const WEEKLY_CALVAO_CAP = 12.000;     // Cap semanal via Calvão (em aura)
+// v13.1 — meta só de EXIBIÇÃO pra barra do Calvão quando não há teto (padrão
+// agora): não bloqueia ninguém, só dá escala pra barra fazer sentido visual.
+const CALVAO_META_EXIBICAO = 100;
 // PATCH 9.4 — Atividades gamificadas (GitHub)
-const WEEKLY_ATIVIDADE_PTS_CAP = 3000;  // Padrão: 3.000 pontos de atividade por semana
+const WEEKLY_ATIVIDADE_PTS_CAP = 30000;  // v13.1 — não bloqueia mais ninguém (30/08);
+// serve só de meta/referência pra barra "quanto farmei essa semana" nas Atividades.
 // v4 — cap de Atividades Gamificadas configurável pelo professor (mesmo padrão do Calvão)
 function getWeeklyAtividadeCap(){
   const v = (typeof currentProf !== 'undefined' && currentProf && currentProf.calvaoPacote)
@@ -1817,6 +1836,61 @@ function getWeeklyAtividadeCap(){
 const ATIVIDADE_PTS_TO_AURA = 0.001;    // 1 ponto = 0,001 aura · teto 3.000 pts = 3,000 aura/semana
 // PATCH 9.5 — Repositório de figurinhas do Calvão (GitHub Pages)
 const CALVAO_FIGURINHAS_MANIFEST = 'https://shamankh.github.io/avataresdocalv-o/manifest.json';
+
+// v13.1 — notificações push de verdade (chegam com o app fechado). A chave
+// pública pode ficar exposta no front (é assim que o Web Push funciona);
+// a privada correspondente mora só na Vercel (VAPID_PRIVATE_KEY).
+const VAPID_PUBLIC_KEY = 'BKkVXCS4KWoqgyJ0SidkDxeoRFxZDmMcvoMNO6sOoLC1QvQWKydpIWfPdktsvm_wbD5iF9Sr4UI7cfjY0tJaOWg';
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+// Estado simples: já perguntou/já está inscrito? Evita ficar perguntando
+// de novo toda hora — só mostra o botão quando ainda faz sentido perguntar.
+function pushSuportado(){
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && (typeof Notification !== 'undefined');
+}
+
+async function inscreverPush(){
+  if(!pushSuportado()){ showNotif('Seu navegador não suporta notificações push.'); return; }
+  try{
+    let permissao = Notification.permission;
+    if(permissao === 'default') permissao = await Notification.requestPermission();
+    if(permissao !== 'granted'){
+      showNotif('Você precisa permitir notificações pro navegador pra receber os avisos.');
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    await fetch(`${API_BASE}/api/student?action=push-inscrever`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ login: studentLogin||CU.login, senha: studentSenha||CU.senha, subscription: sub.toJSON(), userAgent: navigator.userAgent })
+    });
+    try{ localStorage.setItem('farme_push_ativo', '1'); }catch(e){}
+    showNotif('🔔 Avisos ativados! Você vai receber os recados do professor mesmo com o app fechado.');
+    if(typeof renderASide === 'function') renderASide();
+  }catch(e){
+    console.warn('inscreverPush:', e);
+    showNotif('Não consegui ativar os avisos agora. Tente de novo em instantes.');
+  }
+}
+
+function pushJaAtivo(){
+  try{ return localStorage.getItem('farme_push_ativo') === '1' && Notification.permission === 'granted'; }
+  catch(e){ return false; }
+}
 const CALVAO_FIGURINHAS_BASE = 'https://shamankh.github.io/avataresdocalv-o/';
 const MULT_BONUS_PER_X = 0.200;       // +200 pts (0,200 aura) por cada x ativo
 const MULT_X_CAP = 5;                 // Máximo 5x acumulado
@@ -5651,6 +5725,28 @@ async function restaurarNiveisQuest(){
   openEventos();
 }
 
+// v13.1 — professor manda um aviso push pra quem ativou os avisos.
+async function enviarAvisoPush(){
+  const tituloEl = document.getElementById('aviso-titulo');
+  const msgEl = document.getElementById('aviso-mensagem');
+  const btn = document.getElementById('btn-enviar-aviso');
+  const titulo = (tituloEl?.value || '').trim();
+  const mensagem = (msgEl?.value || '').trim();
+  if(!titulo || !mensagem){ showNotif('Preencha o título e a mensagem antes de enviar.'); return; }
+  if(btn){ btn.disabled = true; btn.textContent = '📤 Enviando...'; }
+  try{
+    const r = await apiFetch('/api/db?action=push-enviar', { titulo, mensagem });
+    if(r.aviso){ showNotif('ℹ️ ' + r.aviso); }
+    else showNotif(`✅ Aviso enviado! Chegou em ${r.enviados} aparelho(s)${r.falharam?` (${r.falharam} não puderam ser entregues)`:''}.`);
+    if(tituloEl) tituloEl.value = '';
+    if(msgEl) msgEl.value = '';
+  }catch(e){
+    showNotif('⚠️ ' + (e.message || 'Não foi possível enviar o aviso.'));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '📤 Enviar pra todos que ativaram'; }
+  }
+}
+
 async function desativarCapSemanal(){
   const c = cp();
   c.capSemanalCalvao = 0;
@@ -5853,6 +5949,9 @@ async function feRefreshSnapshot(){
     }
   } catch(e){ console.warn('feRefreshSnapshot', e); }
   if(ATab === 'global'){ const el=document.getElementById('a-content'); if(el) el.innerHTML = renderRankingGlobalContent(); }
+  // v13.1 — re-renderiza a Missão também, mas nunca no meio de uma sessão
+  // em andamento (senão apagaria a conversa do Calvão da tela).
+  if(ATab === 'missao' && !missionActive){ const el=document.getElementById('a-content'); if(el) el.innerHTML = renderMissaoContent(); }
   if(typeof renderASide === 'function') renderASide();
   if(typeof updateAlunoMsgBadge === 'function') updateAlunoMsgBadge();
 }
@@ -6823,6 +6922,16 @@ function openTokensFarme(){
   if(!(TOKENS_HOJE.tokens||[]).length) carregarTokensHome().then(pintarModalTokens);
 }
 
+// Formata "2026-08-30" como "Domingo, 30 de agosto de 2026" (pt-BR).
+function formatarDataFarme(diaStr){
+  if(!diaStr) return '';
+  try{
+    const d = new Date(diaStr+'T12:00:00');
+    const s = d.toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    return s.charAt(0).toUpperCase()+s.slice(1);
+  }catch(e){ return diaStr; }
+}
+
 function pintarModalTokens(){
   const card = document.getElementById('m-tokens-card');
   if(!card) return;
@@ -6836,7 +6945,7 @@ function pintarModalTokens(){
       '<div style="font-family:\'Orbitron\',monospace;font-size:17px;font-weight:900">🔓 Liberar FARME</div>'+
       '<button onclick="document.getElementById(\'m-tokens-ov\').remove()" style="margin-left:auto;background:transparent;border:1px solid var(--border2);color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:15px">×</button>'+
     '</div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Codigos de '+(TOKENS_HOJE.dia||'hoje')+' · valem so hoje</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">📅 '+(formatarDataFarme(TOKENS_HOJE.dia)||'hoje')+' · codigos valem so hoje</div>'+
 
     '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px">'+
       '<div style="font-size:12px;font-weight:700;margin-bottom:8px">⏰ Quando o FARME fica FECHADO</div>'+
@@ -6845,6 +6954,7 @@ function pintarModalTokens(){
       '</div>'+
       '<div style="font-size:11px;color:var(--muted2);line-height:1.6">'+
         'Nos demais horarios o FARME esta aberto normalmente.<br>'+
+        '🟢 Sabados e domingos ficam sempre liberados o dia todo (sem bloqueio de horario de aula).<br>'+
         'Estado da trava: <strong style="color:'+(janelaAtiva?'var(--green2)':'var(--muted)')+'">'+(janelaAtiva?'LIGADA':'DESLIGADA')+'</strong>'+
         ' <button class="btn btn-sm" onclick="alternarJanelaFarme('+(!janelaAtiva)+')" style="margin-left:8px">'+(janelaAtiva?'Desligar trava':'Ligar trava')+'</button>'+
       '</div>'+
@@ -7160,6 +7270,24 @@ function renderEventosContent(){
       </div>
     </div>
 
+    <!-- v13.1 — ENVIAR AVISO (push de verdade pros alunos que ativaram) -->
+    <div class="card" style="margin-bottom:18px;border-color:rgba(240,180,41,.4)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:22px">📢</span>
+        <strong style="font-size:15px;flex:1">Enviar Aviso</strong>
+      </div>
+      <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:10px">
+        Manda uma notificação de verdade — chega mesmo com o app fechado — pra todo aluno que já ativou "🔔 Ativar avisos do professor" no painel dele. Ex: "Loja liberada! Quem já fez as tarefas pode resgatar."
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="aviso-titulo" maxlength="80" placeholder="Título (ex: Loja liberada!)"
+          style="padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:13px;font-family:'Syne',sans-serif"/>
+        <textarea id="aviso-mensagem" maxlength="200" rows="2" placeholder="Mensagem (até 200 caracteres)"
+          style="padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:13px;font-family:'Syne',sans-serif;resize:vertical"></textarea>
+        <button id="btn-enviar-aviso" class="btn btn-sm" onclick="enviarAvisoPush()" style="align-self:flex-start;border-color:rgba(240,180,41,.6);color:var(--gold);font-weight:700">📤 Enviar pra todos que ativaram</button>
+      </div>
+    </div>
+
     <!-- v13 — CORTES DOS NÍVEIS (por quests conquistadas) -->
     ${(()=>{
       const cortes = cortesNivelQuest();
@@ -7230,25 +7358,27 @@ function renderEventosContent(){
       </div>`;
     })()}
 
-    <!-- CONTROLE DO CAP SEMANAL DE ATIVIDADES GAMIFICADAS (v4) -->
+    <!-- META DE EXIBIÇÃO DAS ATIVIDADES GAMIFICADAS (v13.1 — não bloqueia
+         ninguém; só define até onde a barra "Atividades esta semana" enche
+         no painel do aluno. O cap de verdade foi removido em 30/08. -->
     ${(()=>{
       const capAtiv = getWeeklyAtividadeCap();
       const ehPadraoA = !(cp().capSemanalAtividade >= 100);
       const semanaAtual = (typeof farmeSemanaAtual==='function') ? farmeSemanaAtual().split('_')[0] : '';
-      const noTetoA = (DB.turmas||[]).reduce((s,t)=> s + (t.alunos||[]).filter(a=>{
+      const acimaA = (DB.turmas||[]).reduce((s,t)=> s + (t.alunos||[]).filter(a=>{
         const ap = a.atividadesPontos || {};
         return (ap.semana === semanaAtual) && ((ap.pontos||0) >= capAtiv);
       }).length, 0);
       return `<div class="card" style="margin-bottom:18px;border-color:rgba(74,222,128,.4)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
           <span style="font-size:22px">🎮</span>
-          <strong style="font-size:15px;flex:1">Cap semanal das Atividades Gamificadas</strong>
+          <strong style="font-size:15px;flex:1">Meta semanal das Atividades Gamificadas</strong>
           <span class="pill" style="background:rgba(74,222,128,.12);color:var(--green2);font-weight:800">${capAtiv} pts${ehPadraoA?' (padrão)':''}</span>
-          ${noTetoA>0?`<span class="pill" style="background:rgba(252,129,129,.12);color:var(--red2);font-weight:800">${noTetoA} aluno(s) no teto</span>`:''}
+          ${acimaA>0?`<span class="pill" style="background:rgba(96,165,250,.12);color:var(--blue);font-weight:800">${acimaA} já bateram a meta</span>`:''}
         </div>
         <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:12px">
-          Limite de pontos que cada aluno pode ganhar por semana jogando as <strong>Atividades Gamificadas</strong> (aba 🎮). Cada ponto vale <strong>0,001 aura</strong> — ou seja, ${capAtiv} pts = <strong>${fmtAura(capAtiv*ATIVIDADE_PTS_TO_AURA)} aura</strong> por semana.
-          ${noTetoA>0?`<strong style="color:var(--red2)"> Atenção: ${noTetoA} aluno(s) já bateram o teto — ao aumentar, eles voltam a pontuar imediatamente.</strong>`:''}
+          <strong>Não bloqueia ninguém</strong> — é só a referência da barra "Atividades esta semana" que o aluno vê no painel lateral, pra ele ter noção de quanto já farmou. Cada ponto vale <strong>0,001 aura</strong> — ou seja, ${capAtiv} pts = <strong>${fmtAura(capAtiv*ATIVIDADE_PTS_TO_AURA)} aura</strong>.
+          ${acimaA>0?`<span style="color:var(--blue)"> ${acimaA} aluno(s) já passaram desse número essa semana — a barra deles fica cheia, mas continuam ganhando pontos normalmente.</span>`:''}
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input id="cap-ativ-input" type="number" min="100" max="100000" step="500" value="${capAtiv}"
@@ -7257,7 +7387,7 @@ function renderEventosContent(){
           <button class="btn btn-sm" onclick="aplicarCapAtividade()" style="border-color:rgba(74,222,128,.5);color:var(--green2);font-weight:700">✅ Aplicar para todos</button>
           ${!ehPadraoA?`<button class="btn btn-sm" onclick="restaurarCapAtividadePadrao()" style="border-color:rgba(240,180,41,.4);color:var(--gold)">↩️ Padrão (${WEEKLY_ATIVIDADE_PTS_CAP})</button>`:''}
         </div>
-        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 Vale para o aluno no próximo login ou ao abrir a aba 🎮 Atividades.</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 Vale para o aluno no próximo login ou ao abrir a aba 🎮 Atividades ou 🎯 Missão.</div>
       </div>`;
     })()}
 
@@ -9440,6 +9570,15 @@ function toggleASidebarMobile(force){
 
 // v13.1 — botão flutuante "Loja de Prêmios": manda pra aba Quests
 // (onde a loja mora) e desce a tela até a seção da loja.
+// v13.1 — mostra/esconde a senha digitada (login professor e aluno)
+function toggleVerSenha(id, btn){
+  const inp = document.getElementById(id);
+  if(!inp) return;
+  const mostrando = inp.type === 'text';
+  inp.type = mostrando ? 'password' : 'text';
+  if(btn) btn.textContent = mostrando ? '👁️' : '🙈';
+}
+
 function abrirLojaDireto(){
   setATab('quests');
   setTimeout(()=>{
@@ -9455,6 +9594,10 @@ function setATab(t){
   // v13.1 — a lista em si vem de carregarRankingGlobalAluno(); feRefreshSnapshot()
   // ainda roda pra manter os corações/farme-elegante em dia por cima disso.
   if(t === 'global' && CR === 'aluno'){ feRefreshSnapshot(); carregarRankingGlobalAluno(); }
+  // v13.1 — a aba Missão (onde o Calvão mora) tambem precisa revalidar
+  // o pacote do professor (teto semanal etc.) toda vez que é aberta,
+  // senão o aluno só via mudança do professor relogando.
+  if(t === 'missao' && CR === 'aluno'){ feRefreshSnapshot(); }
   // PATCH 9.0 — Garante que o timer continua visível ao trocar de aba durante missão ativa
   if(missionActive && missionStartedAt){
     const el = document.getElementById('topbar-timer');
@@ -9543,8 +9686,16 @@ function renderASide(){
       const sqLeft = hasSQ ? (SUPER_QUEST_MAX - (a.superQuestUsed||0)) : 0;
       const calvaoEarned = a.weeklyCalvaoEarned || 0;
       const capW = getWeeklyCalvaoCap();
-      const semTeto = !isFinite(capW); // v13 — professor desativou o teto semanal
-      const calvaoPct = semTeto ? 100 : Math.min(100, (calvaoEarned/capW)*100);
+      const semTeto = !isFinite(capW); // v13 — professor desativou o teto semanal (padrão agora)
+      // v13.1 — sem teto, a barra usa a meta de exibição só pra ter escala visual;
+      // ninguém é bloqueado ao passar dela, ela só continua contando pra cima.
+      const calvaoPct = semTeto ? Math.min(100, (calvaoEarned/CALVAO_META_EXIBICAO)*100) : Math.min(100, (calvaoEarned/capW)*100);
+      // v13.1 — quanto o aluno farmou nas Atividades essa semana (só exibição)
+      const semanaAtivAtual = (typeof getSemanaAtual==='function') ? getSemanaAtual() : '';
+      const apAtiv = a.atividadesPontos || {};
+      const ativEarned = (apAtiv.semana === semanaAtivAtual) ? (apAtiv.pontos||0) : 0;
+      const metaAtiv = getWeeklyAtividadeCap();
+      const ativPct = Math.min(100, (ativEarned/metaAtiv)*100);
       const leilaoAtivo = getLeilaoAtivo(turma);
       const blocked = isCalvaoBloqueado(a);
       
@@ -9568,6 +9719,19 @@ function renderASide(){
             <span style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--purple2)">${semTeto ? `${fmtAura(calvaoEarned)} · ♾️ sem teto` : `${fmtAura(calvaoEarned)}/${fmtAura(capW)}`}</span>
           </div>
           <div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${calvaoPct}%;background:var(--purple2)"></div></div>
+          ${semTeto?`<div style="font-size:9px;color:var(--muted);margin-top:3px">sem limite · meta visual: ${fmtAura(CALVAO_META_EXIBICAO)}</div>`:''}
+        </div>
+      </div>`;
+
+      // === ATIVIDADES SEMANAL (v13.1 — só exibição, ninguém é bloqueado) ===
+      html += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Atividades esta semana</span>
+            <span style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--green2)">${ativEarned} pts</span>
+          </div>
+          <div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${ativPct}%;background:var(--green2)"></div></div>
+          <div style="font-size:9px;color:var(--muted);margin-top:3px">sem limite · meta visual: ${metaAtiv} pts</div>
         </div>
       </div>`;
       
@@ -9583,6 +9747,15 @@ function renderASide(){
         💬 Mensagens
         <span id="aluno-msg-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red2);color:#fff;font-size:9px;padding:2px 5px;border-radius:8px;font-weight:700"></span>
       </button>`;
+
+      // === BOTÃO ATIVAR AVISOS (v13.1 — push de verdade) ===
+      // Só aparece se o navegador suporta e o aluno ainda não ativou —
+      // depois de ativado, o botão some (não precisa aparecer de novo).
+      if(pushSuportado() && !pushJaAtivo()){
+        html += `<button onclick="inscreverPush()" style="width:100%;background:linear-gradient(135deg,var(--gold),#ff8fab);border:1.5px solid var(--ink);color:var(--ink);padding:10px;border-radius:var(--r);font-weight:800;font-family:'Orbitron',monospace;font-size:12px;cursor:pointer;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:6px">
+          🔔 Ativar avisos do professor
+        </button>`;
+      }
       
       return html;
     })()}
@@ -11513,7 +11686,7 @@ function addAIMsg(text){
   if(!textoLimpo) textoLimpo = 'Beleza, já registrei sua pontuação! 🎉';
   const d=document.createElement('div');
   d.className='msg-ai';
-  d.innerHTML=`<div class="msg-lbl">Calvão de crIA</div><div class="bubble">${textoLimpo.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}</div>`;
+  d.innerHTML=`<div class="msg-lbl">Calvão de crIA</div><div class="bubble" oncopy="return bloquearCopiarPergunta(event)" oncut="return bloquearCopiarPergunta(event)" oncontextmenu="return bloquearCopiarPergunta(event)" onselectstart="return false" ondragstart="return false">${textoLimpo.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}</div>`;
   msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight;
   saveChatMsg('CALVÃO',text);
 }
@@ -11568,6 +11741,21 @@ function bloquearColar(event){
     showNotif('✍️ Aqui é pra escrever com suas palavras! Se preferir, usa o 🎤 pra falar em vez de digitar.');
     _avisoColarMostrado = true;
     setTimeout(()=>{_avisoColarMostrado=false;}, 4000);
+  }
+  return false;
+}
+
+// v13.1 — bloqueia selecionar/copiar a PERGUNTA do Calvão: o objetivo é que
+// o aluno leia antes de sair correndo pra outra IA. Pesquisar não é
+// problema — colar a pergunta sem ler é. Se quiser jogar numa IA, que pelo
+// menos digite a pergunta de novo (e leia de novo fazendo isso).
+let _avisoCopiarMostrado = false;
+function bloquearCopiarPergunta(event){
+  event.preventDefault();
+  if(!_avisoCopiarMostrado){
+    showNotif('👀 Lê a pergunta com calma aqui! Se quiser pesquisar, digite ela com suas palavras.');
+    _avisoCopiarMostrado = true;
+    setTimeout(()=>{_avisoCopiarMostrado=false;}, 4000);
   }
   return false;
 }
@@ -13060,6 +13248,9 @@ async function decidirQuests(decisao){
       showNotif('ℹ️ Algumas já tinham sido decididas em outro aparelho — foram ignoradas.');
     }
     await carregarQuests();
+    // v13.1 — sem isso, o saldo/conquistadas do aluno só atualizava em
+    // outras telas (Visão Global, card do aluno) depois de relogar.
+    carregarQuestSaldos();
   }catch(e){
     showNotif('⚠️ ' + (e.message||'Não foi possível salvar a decisão.'));
     pintarQuests();
@@ -13487,6 +13678,9 @@ async function refreshGlobalView(){
         DB.turmas = fresh.turmas;
       }
     } catch(loadErr){ console.warn('load fresh:', loadErr); }
+    // v13.1 — sem isso, a coluna 🏅 quests da Visão Global ficava travada
+    // no que o professor tinha ao logar, mesmo clicando em Atualizar.
+    try { await carregarQuestSaldos(); } catch(saldoErr){ console.warn('quest-saldos:', saldoErr); }
     
     // Monta lista de TODOS alunos a partir das turmas locais (já carregadas com .limit 5000)
     const alunos = [];
@@ -14254,6 +14448,32 @@ if('serviceWorker' in navigator){
           return;
         }
         // API calls: sempre network (não cacheia chamadas dinâmicas)
+      });
+      // v13.1 — recebe o aviso do professor mesmo com o app fechado
+      // e mostra a notificação do sistema.
+      self.addEventListener('push', e => {
+        let dados = {};
+        try{ dados = e.data ? e.data.json() : {}; }catch(err){ dados = {}; }
+        const titulo = dados.title || 'Farme Aura';
+        const opcoes = {
+          body: dados.body || '',
+          icon: 'https://shamankh.github.io/avataresdocalv-o/amei.gif',
+          badge: 'https://shamankh.github.io/avataresdocalv-o/amei.gif',
+          data: { url: dados.url || '/' },
+          vibrate: [100, 50, 100]
+        };
+        e.waitUntil(self.registration.showNotification(titulo, opcoes));
+      });
+      // Clicou na notificação: abre (ou foca) o Farme Aura.
+      self.addEventListener('notificationclick', e => {
+        e.notification.close();
+        const url = (e.notification.data && e.notification.data.url) || '/';
+        e.waitUntil(
+          clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
+            for(const c of list){ if('focus' in c) return c.focus(); }
+            if(clients.openWindow) return clients.openWindow(url);
+          })
+        );
       });
     `;
     const blob = new Blob([swCode], {type:'application/javascript'});
