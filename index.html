@@ -328,6 +328,10 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 
 /* CHAT */
 .chat-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column;height:500px;}
+/* v13.1 — Calvão em tela cheia (mesma ideia das atividades gamificadas, bom pra celular) */
+.chat-box.calvao-fs{position:fixed !important;inset:0 !important;z-index:9500;height:100vh !important;max-height:100vh !important;border-radius:0 !important;margin:0 !important;}
+body.calvao-fs-on .topbar,body.calvao-fs-on .aluno-side,body.calvao-fs-on .aluno-tabs,body.calvao-fs-on .a-hamburger-float,body.calvao-fs-on .a-loja-float{display:none !important;}
+body.calvao-fs-on .aluno-main.a-content{padding:0 !important;}
 .chat-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
 .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}
 .chat-hi .h{font-size:13px;font-weight:600;}
@@ -374,7 +378,9 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 .inv-locked-mini{opacity:.3;}
 .aluno-app{display:flex;height:calc(100vh - 54px);min-height:0;overflow:hidden;}
 .aluno-main{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;}
-/* BLOCO 5 — Fundo base (o cenário da era é desenhado por fundoEraSVG) */
+/* BLOCO 5 — Fundo base do painel do aluno.
+   v13.1 — era um gradiente escuro roxo/azulado (sobra do fundoEraSVG, já
+   removido). Trocado por um fundo colorido no mesmo espírito do login. */
 .aluno-main::before{
   content:'';
   position:absolute;
@@ -382,8 +388,12 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
   pointer-events:none;
   z-index:0;
   background:
-    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(124,92,252,.06), transparent 70%),
-    linear-gradient(180deg, #181433 0%, #141228 55%, #0f0c22 100%);
+    radial-gradient(circle at 15% 20%, rgba(255,143,171,.16), transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(255,201,60,.14), transparent 42%),
+    radial-gradient(circle at 78% 82%, rgba(122,199,79,.13), transparent 45%),
+    radial-gradient(circle at 18% 85%, rgba(94,200,240,.13), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(232,67,147,.08), transparent 60%),
+    var(--bg);
 }
 .aluno-tabs,.aluno-content{position:relative;z-index:1;}
 /* PATCH 9.4 — Navegação na sidebar do aluno */
@@ -393,6 +403,11 @@ body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-he
 .a-nav-item.active{background:rgba(124,92,252,.15);color:var(--purple2);font-weight:800;border-color:var(--purple2);}
 /* Botão Menu flutuante (só mobile) */
 .a-hamburger-float{display:none;align-items:center;gap:6px;background:linear-gradient(135deg,var(--purple),var(--gold));color:#fff;border:none;padding:12px 18px;border-radius:var(--r);font-family:'Orbitron',monospace;font-weight:700;font-size:14px;cursor:pointer;margin:12px;box-shadow:0 4px 14px rgba(124,92,252,.35);}
+/* v13.1 — botão flutuante da Loja: fica visível em toda tela do aluno,
+   qualquer aba, pra ser o convite óbvio pra estudar e resgatar prêmios. */
+.a-loja-float{position:fixed;z-index:410;left:16px;bottom:20px;display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--gold),#ff8fab);color:var(--ink);border:2.5px solid var(--ink);border-radius:999px;padding:11px 18px;font-family:'Orbitron',monospace;font-weight:800;font-size:12.5px;cursor:pointer;box-shadow:4px 4px 0 var(--ink);letter-spacing:.3px;animation:pulse 2.5s infinite;}
+.a-loja-float:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink);}
+@media (max-width:768px){ .a-loja-float{bottom:78px;padding:10px 14px;font-size:11.5px;} }
 /* Badge "Em busca do Hexa" */
 .copa-badge{
   position:absolute;
@@ -810,6 +825,16 @@ body{font-family:'Fredoka',sans-serif !important;
 }
 /* Quem prefere menos movimento na tela: fundo mais discreto */
 @media (prefers-reduced-motion: reduce){ .doce-bg{ opacity:.3; } }
+/* v13.1 — doces flutuando no fundo da tela de login */
+.login-doces-float{position:absolute;inset:0;}
+.doce-float{position:absolute;bottom:-8%;opacity:0;animation-name:doceFloatUp;animation-timing-function:linear;animation-iteration-count:infinite;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));}
+@keyframes doceFloatUp{
+  0%{transform:translateY(0) rotate(0deg);opacity:0;}
+  8%{opacity:.9;}
+  92%{opacity:.9;}
+  100%{transform:translateY(-115vh) rotate(360deg);opacity:0;}
+}
+@media (prefers-reduced-motion: reduce){ .doce-float{animation:none;opacity:.55;bottom:40%;} }
 
 /* Cards e painéis: borda grossa + cantos fofos + sombra que salta */
 .card,.tv .card,.modal-box,.t-card,.fin-card,.leilao-card{
@@ -946,175 +971,34 @@ input, textarea, select{ font-size:14px; }
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <!-- v13: fundo de confeitaria (.doce-bg) -->
-  <div id="login-eras-bg" style="position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none">
-    <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;opacity:.6">
-      <defs>
-        <linearGradient id="lb-bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#0b0816"/>
-          <stop offset="50%" stop-color="#161129"/>
-          <stop offset="100%" stop-color="#080612"/>
-        </linearGradient>
-        <radialGradient id="lb-smokeGrad1" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#eab308" stop-opacity="0.75"/>
-          <stop offset="50%" stop-color="#ca8a04" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="#854d0e" stop-opacity="0"/>
-        </radialGradient>
-        <linearGradient id="lb-lightningGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#ffffff"/>
-          <stop offset="50%" stop-color="#fde047"/>
-          <stop offset="100%" stop-color="#eab308"/>
-        </linearGradient>
-        <linearGradient id="lb-droneBeam" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/>
-          <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
-        </linearGradient>
-        <filter id="lb-intenseGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="12" result="blur1" />
-          <feGaussianBlur stdDeviation="6" result="blur2" />
-          <feMerge><feMergeNode in="blur1"/><feMergeNode in="blur2"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="lb-glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="8" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-        <filter id="lb-softGlow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="4" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-      <style>
-        .lb-section-title { font-family: 'Orbitron',monospace; font-weight: 800; font-size: 21px; letter-spacing: 2px; text-anchor: middle; text-transform: uppercase; }
-        .lb-section-num { font-weight: 900; font-size: 23px; }
-        @keyframes lbSmokePuffRising { 0% { transform: translateY(0px) scale(0.4) translateX(0px); opacity: 0.85; } 50% { opacity: 0.6; } 100% { transform: translateY(-230px) scale(2.4) translateX(40px); opacity: 0; } }
-        .lb-smoke-1 { animation: lbSmokePuffRising 3.6s infinite linear; transform-box: fill-box; transform-origin: center bottom; }
-        .lb-smoke-2 { animation: lbSmokePuffRising 3.6s infinite linear 1.2s; transform-box: fill-box; transform-origin: center bottom; }
-        .lb-smoke-3 { animation: lbSmokePuffRising 3.6s infinite linear 2.4s; transform-box: fill-box; transform-origin: center bottom; }
-        @keyframes lbGearRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .lb-gear-spin { animation: lbGearRotate 12s linear infinite; transform-box: fill-box; transform-origin: center; }
-        @keyframes lbWindowPulse1 { 0%, 100% { fill: #fef08a; opacity: 0.9; } 30% { fill: #ca8a04; opacity: 0.3; } }
-        @keyframes lbWindowPulse2 { 0%, 100% { fill: #ca8a04; opacity: 0.2; } 40% { fill: #facc15; opacity: 0.95; } }
-        .lb-win-glow-1 { animation: lbWindowPulse1 3.5s infinite ease-in-out; }
-        .lb-win-glow-2 { animation: lbWindowPulse2 4.5s infinite ease-in-out 1s; }
-        @keyframes lbLightningStrike { 0%, 88%, 100% { opacity: 0; stroke-dashoffset: 120; } 90%, 96% { opacity: 1; stroke-dashoffset: 0; } 93% { opacity: 0.4; stroke-dashoffset: 0; } }
-        .lb-lightning-bolt { stroke-dasharray: 120; animation: lbLightningStrike 4s infinite ease-out; }
-        @keyframes lbMainArmRotate { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-18deg); } 60% { transform: rotate(12deg); } }
-        @keyframes lbForearmRotate { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(25deg); } 70% { transform: rotate(-15deg); } }
-        @keyframes lbWeldingLaserSpark { 0%, 100% { opacity: 0.1; stroke-width: 1px; } 20%, 30% { opacity: 1; stroke-width: 3.5px; } }
-        @keyframes lbConveyorItems { 0% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -50; } }
-        .lb-arm-base-pivot { animation: lbMainArmRotate 6s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
-        .lb-arm-forearm-pivot { animation: lbForearmRotate 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center left; }
-        .lb-welding-spark { animation: lbWeldingLaserSpark 1.5s infinite ease-in-out; }
-        .lb-conveyor-belt-items { stroke-dasharray: 12 12; animation: lbConveyorItems 2s linear infinite; }
-        @keyframes lbDataPulse { 0% { stroke-dashoffset: 200; opacity: 0.2; } 50% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0.2; } }
-        .lb-circuit-line { stroke-dasharray: 200; animation: lbDataPulse 3s linear infinite; }
-        @keyframes lbDroneHover1 { 0%, 100% { transform: translate(1520px, 340px); } 50% { transform: translate(1560px, 370px); } }
-        @keyframes lbDroneHover2 { 0%, 100% { transform: translate(1730px, 390px); } 50% { transform: translate(1700px, 350px); } }
-        @keyframes lbDroneHover3 { 0%, 100% { transform: translate(1630px, 240px); } 50% { transform: translate(1660px, 270px); } }
-        @keyframes lbRotorSpin { 0% { transform: scaleX(1); } 50% { transform: scaleX(0.15); } 100% { transform: scaleX(1); } }
-        @keyframes lbNetworkPulse { 0%, 100% { stroke-dashoffset: 100; opacity: 0.2; } 50% { stroke-dashoffset: 0; opacity: 1; } }
-        .lb-drone-group-1 { animation: lbDroneHover1 8s ease-in-out infinite; }
-        .lb-drone-group-2 { animation: lbDroneHover2 9s ease-in-out infinite; }
-        .lb-drone-group-3 { animation: lbDroneHover3 7s ease-in-out infinite; }
-        .lb-rotor { animation: lbRotorSpin 0.12s linear infinite; transform-box: fill-box; transform-origin: center; }
-        .lb-network-link { stroke-dasharray: 12 6; animation: lbNetworkPulse 2.5s linear infinite; }
-        .lb-bg-grid { stroke: #261d3b; stroke-width: 0.5; opacity: 0.35; }
-      </style>
-      <rect width="1920" height="1080" fill="url(#lb-bgGradient)"/>
-      <g class="lb-bg-grid">
-        <path d="M0,200 H1920 M0,400 H1920 M0,600 H1920 M0,800 H1920" />
-        <path d="M240,0 V1080 M480,0 V1080 M720,0 V1080 M960,0 V1080 M1200,0 V1080 M1440,0 V1080 M1680,0 V1080" />
-      </g>
-      <line x1="0" y1="820" x2="1920" y2="820" stroke="#33284d" stroke-width="2" />
-      <!-- 1ª VAPOR -->
-      <g id="lb-sec-vapor">
-        <g transform="translate(180, 515)">
-          <circle class="lb-smoke-1" cx="0" cy="0" r="18" fill="url(#lb-smokeGrad1)" />
-          <circle class="lb-smoke-2" cx="0" cy="0" r="22" fill="url(#lb-smokeGrad1)" />
-          <circle class="lb-smoke-3" cx="0" cy="0" r="26" fill="url(#lb-smokeGrad1)" />
-        </g>
-        <g transform="translate(295, 465)">
-          <circle class="lb-smoke-1" cx="0" cy="0" r="20" fill="url(#lb-smokeGrad1)" />
-          <circle class="lb-smoke-2" cx="0" cy="0" r="25" fill="url(#lb-smokeGrad1)" />
-        </g>
-        <path d="M 60,820 V 580 L 120,620 V 580 L 180,620 V 580 L 240,620 V 520 H 310 V 820 Z" fill="#2d1d19" opacity="0.9" />
-        <rect x="165" y="520" width="30" height="260" fill="#231411" />
-        <rect x="277" y="470" width="36" height="310" fill="#1d0f0c" />
-        <g transform="translate(115, 720)" class="lb-gear-spin" fill="#523223">
-          <path d="M0 -30 L6 -30 L8 -22 A25 25 0 0 1 18 -18 L25 -22 L30 -16 L25 -9 A25 25 0 0 1 27 3 L34 8 L30 16 L22 14 A25 25 0 0 1 18 22 L21 30 L14 33 L9 25 A25 25 0 0 1 -3 27 L-8 34 L-16 30 L-14 22 A25 25 0 0 1 -22 18 L-30 22 L-33 14 L-25 9 A25 25 0 0 1 -27 -3 L-34 -8 L-30 -16 L-22 -14 A25 25 0 0 1 -18 -22 L-21 -30 L-14 -33 L-9 -25 A25 25 0 0 1 3 -27 Z"/>
-          <circle cx="0" cy="0" r="10" fill="#0b0816"/>
-        </g>
-        <text x="210" y="870" class="lb-section-title" fill="#8c5839"><tspan class="lb-section-num" fill="#b86b35">1ª</tspan> • VAPOR</text>
-      </g>
-      <!-- 2ª ELÉTRICA -->
-      <g id="lb-sec-eletrica">
-        <rect x="390" y="490" width="180" height="330" fill="#3a2e1d" opacity="0.95" />
-        <rect x="550" y="430" width="140" height="390" fill="#291e10" opacity="0.98" />
-        <rect x="410" y="520" width="30" height="38" rx="3" class="lb-win-glow-1" />
-        <rect x="460" y="520" width="30" height="38" rx="3" class="lb-win-glow-2" />
-        <rect x="510" y="520" width="30" height="38" rx="3" class="lb-win-glow-1" />
-        <rect x="410" y="580" width="30" height="38" rx="3" class="lb-win-glow-2" />
-        <rect x="460" y="580" width="30" height="38" rx="3" class="lb-win-glow-1" />
-        <rect x="510" y="580" width="30" height="38" rx="3" class="lb-win-glow-2" />
-        <path d="M 680,820 L 695,460 L 710,820 M 665,500 H 725 M 670,550 H 720" stroke="#6b4c1b" stroke-width="3" fill="none" />
-        <path class="lb-lightning-bolt" d="M 695,450 L 675,485 L 700,495 L 680,540" stroke="url(#lb-lightningGrad)" stroke-width="3.5" fill="none" filter="url(#lb-intenseGlow)" />
-        <text x="570" y="870" class="lb-section-title" fill="#d35400"><tspan class="lb-section-num" fill="#f39c12">2ª</tspan> • ELÉTRICA</text>
-      </g>
-      <!-- ESPAÇO CENTRAL LIVRE PARA O CARD DE LOGIN -->
-      <!-- 3ª AUTOMAÇÃO -->
-      <g id="lb-sec-automacao">
-        <rect x="1200" y="520" width="220" height="300" rx="12" fill="#10322f" opacity="0.9" stroke="#14b8a6" stroke-width="1.5" />
-        <g transform="translate(1260, 720)">
-          <rect x="-35" y="80" width="70" height="20" rx="5" fill="#14b8a6" />
-          <circle cx="0" cy="50" r="14" fill="#1e293b" stroke="#2dd4bf" stroke-width="3" />
-          <g class="lb-arm-base-pivot">
-            <line x1="0" y1="50" x2="35" y2="-25" stroke="#2dd4bf" stroke-width="12" stroke-linecap="round" />
-            <g transform="translate(35, -25)" class="lb-arm-forearm-pivot">
-              <line x1="0" y1="0" x2="65" y2="-10" stroke="#14b8a6" stroke-width="8" stroke-linecap="round" />
-              <line class="lb-welding-spark" x1="75" y1="12" x2="95" y2="55" stroke="#5eead4" stroke-width="3" filter="url(#lb-intenseGlow)" />
-            </g>
-          </g>
-        </g>
-        <line x1="1180" y1="800" x2="1500" y2="800" stroke="#0f766e" stroke-width="8" />
-        <line class="lb-conveyor-belt-items" x1="1180" y1="800" x2="1500" y2="800" stroke="#5eead4" stroke-width="5" />
-        <text x="1350" y="870" class="lb-section-title" fill="#0d9488"><tspan class="lb-section-num" fill="#14b8a6">3ª</tspan> • AUTOMAÇÃO</text>
-      </g>
-      <!-- 4ª DIGITAL -->
-      <g id="lb-sec-digital">
-        <rect x="1530" y="480" width="280" height="340" rx="10" fill="#181236" stroke="#6d28d9" stroke-width="2" opacity="0.95" />
-        <g fill="none" stroke="#a855f7" stroke-width="3" stroke-linecap="round" filter="url(#lb-softGlow)">
-          <path class="lb-circuit-line" d="M 1550,540 H 1640 L 1680,580 V 740 H 1750" />
-          <path class="lb-circuit-line" d="M 1770,520 V 620 L 1720,670 H 1570" stroke="#6366f1" />
-        </g>
-        <g stroke-linecap="round" filter="url(#lb-glow)">
-          <line class="lb-network-link" x1="1540" y1="340" x2="1710" y2="380" stroke="#38bdf8" stroke-width="2" />
-          <line class="lb-network-link" x1="1540" y1="340" x2="1640" y2="250" stroke="#c084fc" stroke-width="2" />
-          <line class="lb-network-link" x1="1710" y1="380" x2="1640" y2="250" stroke="#ec4899" stroke-width="2" />
-        </g>
-        <g class="lb-drone-group-1">
-          <polygon points="-10,15 10,15 35,140 -35,140" fill="url(#lb-droneBeam)" opacity="0.5"/>
-          <ellipse cx="0" cy="0" rx="22" ry="8" fill="#2e1065" stroke="#38bdf8" stroke-width="2" />
-          <circle cx="0" cy="-2" r="5" fill="#38bdf8" filter="url(#lb-glow)" />
-          <line class="lb-rotor" x1="-50" y1="-7" x2="-26" y2="-7" stroke="#38bdf8" stroke-width="2" />
-          <line class="lb-rotor" x1="26" y1="-7" x2="50" y2="-7" stroke="#38bdf8" stroke-width="2" />
-        </g>
-        <g class="lb-drone-group-2">
-          <polygon points="-10,12 10,12 25,100 -25,100" fill="url(#lb-droneBeam)" opacity="0.4"/>
-          <ellipse cx="0" cy="0" rx="20" ry="7" fill="#1e1b4b" stroke="#ec4899" stroke-width="2" />
-          <circle cx="0" cy="-2" r="4" fill="#ec4899" filter="url(#lb-glow)" />
-          <line class="lb-rotor" x1="-44" y1="-6" x2="-24" y2="-6" stroke="#a855f7" stroke-width="2" />
-          <line class="lb-rotor" x1="24" y1="-6" x2="44" y2="-6" stroke="#a855f7" stroke-width="2" />
-        </g>
-        <g class="lb-drone-group-3">
-          <ellipse cx="0" cy="0" rx="18" ry="6" fill="#1e1538" stroke="#a855f7" stroke-width="2" />
-          <circle cx="0" cy="-2" r="4" fill="#c084fc" filter="url(#lb-glow)" />
-          <line class="lb-rotor" x1="-38" y1="-6" x2="-22" y2="-6" stroke="#38bdf8" stroke-width="2" />
-          <line class="lb-rotor" x1="22" y1="-6" x2="38" y2="-6" stroke="#38bdf8" stroke-width="2" />
-        </g>
-        <text x="1680" y="870" class="lb-section-title" fill="#8b5cf6"><tspan class="lb-section-num" fill="#c084fc">4ª</tspan> • DIGITAL</text>
-      </g>
-    </svg>
-    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 50% 50%, transparent, rgba(20,16,42,.85))"></div>
+  <!-- v13.1 — fundo animado de confeitaria (substituiu o cenario das 4 eras industriais que tinha ficado esquecido aqui) -->
+  <div id="login-doces-bg" style="position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,143,171,.30), transparent 40%),
+      radial-gradient(circle at 85% 15%, rgba(255,201,60,.24), transparent 42%),
+      radial-gradient(circle at 78% 82%, rgba(122,199,79,.22), transparent 45%),
+      radial-gradient(circle at 18% 85%, rgba(94,200,240,.22), transparent 42%),
+      radial-gradient(circle at 50% 50%, rgba(232,67,147,.14), transparent 60%),
+      var(--bg);">
+    <div class="doce-bg" style="opacity:.7"></div>
+    <div class="login-doces-float">
+      <span class="doce-float" style="left:4%;font-size:26px;animation-duration:14s;animation-delay:0s">🍬</span>
+      <span class="doce-float" style="left:12%;font-size:34px;animation-duration:18s;animation-delay:2s">🍭</span>
+      <span class="doce-float" style="left:20%;font-size:22px;animation-duration:12s;animation-delay:5s">🍫</span>
+      <span class="doce-float" style="left:28%;font-size:30px;animation-duration:16s;animation-delay:1s">🧁</span>
+      <span class="doce-float" style="left:36%;font-size:24px;animation-duration:13s;animation-delay:7s">🍩</span>
+      <span class="doce-float" style="left:44%;font-size:20px;animation-duration:15s;animation-delay:3s">🍡</span>
+      <span class="doce-float" style="left:52%;font-size:28px;animation-duration:17s;animation-delay:6s">🍪</span>
+      <span class="doce-float" style="left:60%;font-size:22px;animation-duration:14s;animation-delay:9s">🧃</span>
+      <span class="doce-float" style="left:68%;font-size:26px;animation-duration:19s;animation-delay:4s">🍥</span>
+      <span class="doce-float" style="left:76%;font-size:20px;animation-duration:12s;animation-delay:8s">🍬</span>
+      <span class="doce-float" style="left:84%;font-size:32px;animation-duration:20s;animation-delay:2.5s">🍭</span>
+      <span class="doce-float" style="left:92%;font-size:24px;animation-duration:15s;animation-delay:10s">🍫</span>
+      <span class="doce-float" style="left:8%;font-size:18px;animation-duration:11s;animation-delay:11s">🧁</span>
+      <span class="doce-float" style="left:48%;font-size:36px;animation-duration:21s;animation-delay:0.5s">🍩</span>
+      <span class="doce-float" style="left:66%;font-size:18px;animation-duration:13.5s;animation-delay:12s">🍪</span>
+      <span class="doce-float" style="left:96%;font-size:22px;animation-duration:16.5s;animation-delay:6.5s">🍭</span>
+    </div>
   </div>
   <!-- Calvão flutuando acima da caixa de login -->
   <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:999">
@@ -2054,11 +1938,13 @@ function getCalvaoBloqueioRestante(aluno){
 
 // Cap semanal do Calvão — PATCH 9.13: configurável pelo professor.
 // O valor vive em calvaoPacote.capSemanalCalvao (já chega ao aluno no login).
-// Sem valor definido, vale o padrão WEEKLY_CALVAO_CAP (12.000).
+// v13.1 — o padrão MUDOU: sem teto, a menos que o professor ligue um valor
+// explícito no painel Eventos (era o contrário: WEEKLY_CALVAO_CAP por padrão,
+// e só ficava sem teto se ele clicasse "desativar"). O controle continua lá,
+// reversível — só a partida agora é "sem limite".
 function getWeeklyCalvaoCap(){
   const v = (currentProf && currentProf.calvaoPacote) ? currentProf.calvaoPacote.capSemanalCalvao : null;
-  if(v === 0) return Infinity; // v13 — professor desativou o teto semanal (painel Eventos)
-  return (typeof v === 'number' && v >= 1 && v <= 100) ? v : WEEKLY_CALVAO_CAP;
+  return (typeof v === 'number' && v >= 1 && v <= 100) ? v : Infinity;
 }
 function canEarnCalvao(aluno){
   initHearts(aluno);
@@ -3112,7 +2998,7 @@ function renderProfApp(){
         <span>${CU.disciplina||'FARME AURA'}</span>
         <span id="sb-farme-arrow" style="transition:transform .18s;transform:rotate(${farmeAberto?90:0}deg);font-size:10px">▶</span>
       </div>
-      <div id="sb-farme-menu" style="overflow:hidden;max-height:${farmeAberto?'400px':'0'};transition:max-height .22s ease">
+      <div id="sb-farme-menu" style="overflow-y:auto;overflow-x:hidden;max-height:${farmeAberto?'50vh':'0'};transition:max-height .22s ease">
       <div class="t-tab ${!CTid?'active':''}" onclick="showProfHome();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--gold)"></div>
         <span style="font-size:12px">🏠 Início & Horário</span>
@@ -5515,6 +5401,30 @@ function feEncontrarAluno(login){
   return null;
 }
 
+// v13.1 — Ranking Global do aluno: agora vem de uma consulta ao vivo
+// (action=global-ranking), não depende mais do Farme Elegante ter sido
+// ligado alguma vez. O Farme Elegante continua controlando só a parte de
+// enviar corações, que fica por cima desta lista.
+let _globalAlunoRank = null;        // null = ainda não carregou; [] = veio vazio de verdade
+let _globalAlunoRankLoading = false;
+async function carregarRankingGlobalAluno(){
+  if(CR !== 'aluno' || _globalAlunoRankLoading) return;
+  _globalAlunoRankLoading = true;
+  try{
+    const r = await fetch(`${API_BASE}/api/student?action=global-ranking`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ login: studentLogin||CU.login, senha: studentSenha||CU.senha })
+    });
+    if(r.ok){
+      const d = await r.json();
+      _globalAlunoRank = d.ranking || [];
+      (_globalAlunoRank||[]).forEach(e=> guardarQuests(e.login, null, e.conquistadas, e.saldo));
+    }
+  }catch(e){ console.warn('global-ranking:', e); }
+  _globalAlunoRankLoading = false;
+  if(ATab==='global'){ const el=document.getElementById('a-content'); if(el) el.innerHTML = renderRankingGlobalContent(); }
+}
+
 // ==============================
 // PATCH 9.10 — SISTEMA MULTI-EVENTO (flags independentes no calvaoPacote)
 // Cada evento tem: flag de ativo + dados próprios + função de reiniciar.
@@ -5708,7 +5618,9 @@ async function aplicarCapSemanal(){
 }
 async function restaurarCapPadrao(){
   const c = cp();
-  delete c.capSemanalCalvao;
+  // v13.1 — precisa gravar o valor explicitamente: como o padrão agora é
+  // "sem teto" quando o campo não está definido, só apagar não reativa nada.
+  c.capSemanalCalvao = WEEKLY_CALVAO_CAP;
   await salvarEventos();
   showNotif(`✅ Cap semanal restaurado ao padrão (${fmtAura(WEEKLY_CALVAO_CAP)}).`);
   openEventos();
@@ -5976,6 +5888,7 @@ document.addEventListener('keydown', (e) => {
     document.getElementById('fe-modal-overlay')?.remove();
     document.getElementById('m-fe-caixa')?.remove();
     document.getElementById('m-duelo-sel')?.remove();
+    if(document.body.classList.contains('calvao-fs-on') && typeof toggleCalvaoFullscreen==='function') toggleCalvaoFullscreen();
   }
 });
 function feModalHTML(){
@@ -6119,11 +6032,13 @@ async function votarNota10(login, nome){
 function renderRankingGlobalContent(){
   const ativo = farmeEleganteAtivo();
   const rec = feRecebidosMap();
-  let lista = feSnapshot().map(e => ({...e, coracoes: rec[e.login]||0}));
-  // garante que o próprio aluno aparece mesmo se o snapshot estiver velho
+  const carregando = _globalAlunoRank === null;
+  let lista = (_globalAlunoRank||[]).map(e => ({...e, coracoes: rec[e.login]||0}));
+  // garante que o próprio aluno aparece mesmo se a lista ainda não trouxe ele
   if(!lista.some(e=>e.login===CU.login)){
     const turma = DB.turmas.find(t=>t.id===CTid);
-    lista.push({ login:CU.login, nome:CU.nome, turma: turma?`${turma.ano} ${turma.turma}`:'', aura:parseAura(CU.aura), coracoes: rec[CU.login]||0 });
+    lista.push({ login:CU.login, nome:CU.nome, turma: turma?`${turma.ano} ${turma.turma}`:'',
+      aura:parseAura(CU.aura), conquistadas: questsDoAluno(CU), saldo: saldoDoAluno(CU), coracoes: rec[CU.login]||0 });
   }
   lista.sort((a,b)=> b.aura - a.aura);
   // Busca por nome/turma (Patch 9.9)
@@ -6135,9 +6050,9 @@ function renderRankingGlobalContent(){
 
   if(lista.length === 0){
     return `<div style="text-align:center;padding:40px 20px;color:var(--muted2)">
-      <div style="font-size:42px;margin-bottom:10px">🌍</div>
+      <div style="font-size:42px;margin-bottom:10px">${carregando?'⏳':'🌍'}</div>
       <div style="font-family:'Orbitron',monospace;font-weight:900;margin-bottom:6px">Ranking Global</div>
-      <div style="font-size:13px;max-width:320px;margin:0 auto">O professor ainda não publicou o ranking global. Volte em instantes!</div>
+      <div style="font-size:13px;max-width:320px;margin:0 auto">${carregando?'Carregando o ranking...':'Ainda não há outros alunos cadastrados. Volte em instantes!'}</div>
     </div>`;
   }
   const medal = (i)=> i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
@@ -6176,7 +6091,7 @@ function renderRankingGlobalContent(){
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden">
         <table class="stbl">
-          <thead><tr><th style="width:38px">#</th><th>Aluno</th><th>Aura</th><th style="text-align:center">💜</th>${ativo?'<th></th>':''}${votacao?'<th></th>':''}</tr></thead>
+          <thead><tr><th style="width:38px">#</th><th>Aluno</th><th style="text-align:right">🏅</th><th style="text-align:right">Aura</th><th style="text-align:center">💜</th>${ativo?'<th></th>':''}${votacao?'<th></th>':''}</tr></thead>
           <tbody>
             ${listaFiltrada.map((e)=>{
               const i = lista.indexOf(e); // posição GLOBAL real (não muda com a busca)
@@ -6188,7 +6103,8 @@ function renderRankingGlobalContent(){
               return `<tr style="${isMe?'background:rgba(124,92,252,.08);border-left:3px solid var(--purple2)':''}">
                 <td style="color:${i<3?'var(--gold)':'var(--muted)'};font-weight:${i<3?700:400};font-family:'Orbitron',monospace;font-size:${i<3?'15':'12'}px">${medal(i)}</td>
                 <td style="font-weight:${isMe?700:400}">${e.nome}${isMe?'<span style="font-size:9px;color:var(--purple2);background:rgba(124,92,252,.15);padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:700">VOCÊ</span>':''}<div style="font-size:10px;color:var(--muted)">${e.turma||''}</div></td>
-                <td><span style="color:${c};font-family:'Orbitron',monospace;font-size:12px;font-weight:700">${fmtAura(e.aura)}</span></td>
+                <td style="text-align:right"><span style="color:var(--gold);font-family:'Orbitron',monospace;font-size:12px;font-weight:700">🏅 ${questsDoAluno(e)}</span></td>
+                <td style="text-align:right"><span style="color:${c};font-family:'Orbitron',monospace;font-size:12px;font-weight:700">${fmtAura(e.aura)}</span></td>
                 <td style="text-align:center;font-family:'Orbitron',monospace;font-weight:700;color:${e.coracoes>0?'var(--pink,#ff6b9d)':'var(--muted)'}">${e.coracoes||0}</td>
                 ${btn}
                 ${votacao ? (isMe ? '<td></td>' : `<td style="text-align:right">${(meuVotoPend||meuVoto)===e.login
@@ -7278,8 +7194,10 @@ function renderEventosContent(){
     <!-- CONTROLE DO CAP SEMANAL (Patch 9.13) -->
     ${(()=>{
       const capBruto = cp().capSemanalCalvao;
-      const desativado = capBruto === 0;
-      const ehPadrao = !desativado && !(capBruto >= 1);
+      // v13.1 — "sem teto" agora é o padrão: cobre tanto o 0 explícito
+      // quanto o campo nunca configurado (antes só o 0 contava).
+      const desativado = !(capBruto >= 1);
+      const ehPadrao = capBruto === WEEKLY_CALVAO_CAP;
       const capAtual = getWeeklyCalvaoCap();
       const noTeto = desativado ? 0 : (DB.turmas||[]).reduce((s,t)=> s + (t.alunos||[]).filter(a=>(a.weeklyCalvaoEarned||0) >= capAtual).length, 0);
       return `<div class="card" style="margin-bottom:18px;border-color:rgba(96,165,250,.4)">
@@ -9119,6 +9037,7 @@ function renderAlunoApp(){
           </div>
         </div>
         <button class="a-hamburger-float" onclick="toggleASidebarMobile()">☰ Menu</button>
+        <button class="a-loja-float" id="a-loja-float" onclick="abrirLojaDireto()">🛍️ Loja de Prêmios</button>
         <div class="aluno-tabs" style="display:flex;align-items:center;gap:6px">
           <div class="a-tab ${ATab==='missao'?'active':''}" onclick="setATab('missao')">🎯 Missão</div>
           <div class="a-tab ${ATab==='ranking'?'active':''}" onclick="setATab('ranking')">🏆 Ranking</div>
@@ -9146,7 +9065,18 @@ function renderAlunoApp(){
 // o padrão de confeitaria (CSS puro, em .doce-bg), muito mais leve — o
 // anterior eram 4 SVGs grandes trocando a cada 67 segundos.
 function fundoDocesHtml(){
-  return '<div class="doce-bg" aria-hidden="true"></div>';
+  // v13.1 — mesmos doces flutuantes do fundo do login, só que aqui no
+  // painel do aluno: reaproveita a classe .doce-float (CSS já existe).
+  const doces = ['🍬','🍭','🍫','🧁','🍩','🍡','🍪','🧃','🍥'];
+  const floats = Array.from({length:14}, (_,i)=>{
+    const emoji = doces[i % doces.length];
+    const left = (i*7 + (i%3)*3) % 100;
+    const size = 18 + (i % 5) * 3;
+    const dur = 12 + (i % 8) * 1.2;
+    const delay = (i * 1.3) % 12;
+    return `<span class="doce-float" style="left:${left}%;font-size:${size}px;animation-duration:${dur}s;animation-delay:${delay}s">${emoji}</span>`;
+  }).join('');
+  return `<div class="doce-bg" aria-hidden="true"></div><div class="login-doces-float" aria-hidden="true">${floats}</div>`;
 }
 
 // PATCH 9.5 — Mascote Calvão flutuante (canto superior direito)
@@ -9508,11 +9438,23 @@ function toggleASidebarMobile(force){
   }
 }
 
+// v13.1 — botão flutuante "Loja de Prêmios": manda pra aba Quests
+// (onde a loja mora) e desce a tela até a seção da loja.
+function abrirLojaDireto(){
+  setATab('quests');
+  setTimeout(()=>{
+    const el = document.getElementById('loja-secao');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 60);
+}
+
 function setATab(t){ 
   ATab=t; 
   renderAContent();
   // PATCH 9.8 — ao abrir o Ranking Global, atualiza o snapshot (chamada extra)
-  if(t === 'global' && CR === 'aluno') feRefreshSnapshot();
+  // v13.1 — a lista em si vem de carregarRankingGlobalAluno(); feRefreshSnapshot()
+  // ainda roda pra manter os corações/farme-elegante em dia por cima disso.
+  if(t === 'global' && CR === 'aluno'){ feRefreshSnapshot(); carregarRankingGlobalAluno(); }
   // PATCH 9.0 — Garante que o timer continua visível ao trocar de aba durante missão ativa
   if(missionActive && missionStartedAt){
     const el = document.getElementById('topbar-timer');
@@ -9527,6 +9469,9 @@ function setATab(t){
   }
   // PATCH 9.4 — Atualiza destaque da barra inferior mobile
   if(typeof montarNavInferiorMobile === 'function') montarNavInferiorMobile();
+  // v13.1 — esconde o botao flutuante da loja quando ja esta na aba Quests
+  const lojaFloatBtn = document.getElementById('a-loja-float');
+  if(lojaFloatBtn) lojaFloatBtn.style.display = (t === 'quests') ? 'none' : 'flex';
 }
 
 function renderASide(){
@@ -9705,7 +9650,7 @@ function renderAContent(){
     setTimeout(()=>{ try{ atualizarBarraPontuacao(); }catch(e){} }, 30);
   }
   else if(ATab==='ranking'){ el.innerHTML=renderRankingContent(); carregarQuestRanking(); }
-  else if(ATab==='global') el.innerHTML=renderRankingGlobalContent();
+  else if(ATab==='global'){ el.innerHTML=renderRankingGlobalContent(); carregarRankingGlobalAluno(); }
   else if(ATab==='semanal'){ const t=DB.turmas.find(x=>x.id===CTid); el.innerHTML=renderRankingSemanal(t); }
   else if(ATab==='quests'){ el.innerHTML=renderQuestsAlunoContent(); carregarQuestAluno(); carregarTrilha(); }
   else if(ATab==='loot') el.innerHTML=renderLootContent();
@@ -9881,7 +9826,7 @@ function renderQuestAlunoInner(){
 
   return topo + trilhaCardHtml() + cardTarefas + `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900">🛍️ Loja de Prêmios</div>
+      <div id="loja-secao" style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900">🛍️ Loja de Prêmios</div>
       ${avisoLoja}
       <button class="btn btn-sm" style="margin-left:auto" onclick="carregarQuestAluno()">🔄</button>
     </div>` + loja + resgates + hist;
@@ -9923,6 +9868,19 @@ function getBoostMult(){
   return getXCount(CU);
 }
 
+// v13.1 — Calvão em tela cheia: melhora o uso no celular. É só um toggle
+// visual (a lógica de missão/pontuação não muda em nada) — some com a
+// topbar/sidebar/abas enquanto ativo, e volta tudo ao normal ao sair.
+function toggleCalvaoFullscreen(){
+  const box = document.getElementById('calvao-chat-box');
+  if(!box) return;
+  const ligar = !box.classList.contains('calvao-fs');
+  box.classList.toggle('calvao-fs', ligar);
+  document.body.classList.toggle('calvao-fs-on', ligar);
+  const btn = document.getElementById('calvao-fs-btn');
+  if(btn){ btn.innerHTML = ligar ? '✕' : '⛶'; btn.title = ligar ? 'Sair da tela cheia' : 'Tela cheia'; }
+}
+
 function renderMissaoContent(){
   const bim=getBimAtivo();
   const semCoracao = coracoesDesativados() ? false : (CU.hearts || 0) <= 0;
@@ -9956,13 +9914,14 @@ function renderMissaoContent(){
       </div>
       ${missionActive ? `<div id="calvao-barra-pontos" style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:10px 14px;margin-bottom:12px"></div>` : ''}
       ${showChat ? `
-        <div class="chat-box">
+        <div class="chat-box" id="calvao-chat-box">
           <div class="chat-head">
             <div class="ai-dot"></div>
             <div class="chat-hi">
               <div class="h">Calvão de crIA</div>
               <div class="s">Sessão de 25 minutos · 0 a 2,000 pontos</div>
             </div>
+            <button onclick="toggleCalvaoFullscreen()" id="calvao-fs-btn" title="Tela cheia" style="margin-left:auto;background:var(--bg4);border:1px solid var(--border2);color:var(--muted2);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:15px;flex-shrink:0">⛶</button>
           </div>
           <div class="chat-msgs" id="chat-msgs"></div>
           <div class="chat-in-row">
@@ -10472,8 +10431,6 @@ function getAtividadesDisponiveis(){
 
 function renderAtividadesContent(){
   const ap = getAtividadePontos();
-  const restante = Math.max(0, getWeeklyAtividadeCap() - ap.pontos);
-  const pctSemana = Math.round((ap.pontos / getWeeklyAtividadeCap()) * 100);
   const atividades = getAtividadesDisponiveis();
 
   let cards = '';
@@ -10493,7 +10450,7 @@ function renderAtividadesContent(){
         const totalGanho = jaJogou.reduce((s,l) => s + (l.pontos||0), 0);
         const usos = atividadeUsosDe(a.id);
         const travada = usos >= ATIVIDADE_MAX_USOS;
-        const bloqueado = travada || restante <= 0;
+        const bloqueado = travada; // v13.1 — sem mais teto semanal de pontos
         const corUso = travada ? 'var(--red2)' : usos === 1 ? 'var(--gold)' : 'var(--muted)';
         return `
           <div style="background:linear-gradient(135deg,rgba(124,92,252,.08),rgba(14,165,233,.05));border:1.5px solid ${travada?'rgba(229,62,62,.35)':'var(--purple2)'};border-radius:var(--r2);padding:16px;display:flex;flex-direction:column;gap:8px;${travada?'opacity:.75':''}">
@@ -10509,7 +10466,7 @@ function renderAtividadesContent(){
             ${totalGanho > 0 ? `<div style="font-size:11px;color:var(--green2);font-weight:700">✅ Você já ganhou ${fmtAura(totalGanho * ATIVIDADE_PTS_TO_AURA)} aura</div>` : ''}
             <button onclick="abrirAtividade('${a.id}')" ${bloqueado?'disabled':''}
               style="margin-top:auto;background:${bloqueado?'var(--bg3)':'linear-gradient(135deg,var(--purple),var(--gold))'};color:${bloqueado?'var(--muted)':'#fff'};border:none;padding:10px;border-radius:8px;font-family:'Orbitron',monospace;font-weight:700;font-size:12px;cursor:${bloqueado?'not-allowed':'pointer'};letter-spacing:.5px">
-              ${travada ? '🔒 JOGADA 2X ESTA SEMANA' : (restante<=0 ? '🔒 LIMITE SEMANAL' : '▶ JOGAR')}
+              ${travada ? '🔒 JOGADA 2X ESTA SEMANA' : '▶ JOGAR'}
             </button>
           </div>`;
       }).join('') + `</div>`;
@@ -10519,21 +10476,10 @@ function renderAtividadesContent(){
     <div>
       <div style="margin-bottom:16px">
         <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900;margin-bottom:4px">🎮 Atividades Gamificadas</div>
-        <div style="font-size:12px;color:var(--muted)">Jogue e ganhe aura! Cada 1.000 pontos = 1,000 aura (limite de 3,000 aura por semana).<br>Cada atividade pode ser jogada <strong>2x por semana</strong> — varie os conteúdos!</div>
+        <div style="font-size:12px;color:var(--muted)">Jogue e ganhe aura — sem teto semanal! Cada atividade pode ser jogada <strong>2x por semana</strong> — varie os conteúdos!</div>
       </div>
 
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:18px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:12px;color:var(--muted2);font-weight:700">Pontos desta semana</div>
-          <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;color:${pctSemana>=100?'var(--red2)':'var(--gold)'}">${ap.pontos} / ${getWeeklyAtividadeCap()}</div>
-        </div>
-        <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${Math.min(100,pctSemana)}%;background:linear-gradient(90deg,var(--purple),var(--gold));transition:width .3s"></div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">
-          ${restante > 0 ? `Você ainda pode ganhar <strong style="color:var(--gold)">${restante} pontos</strong> (${fmtAura(restante * ATIVIDADE_PTS_TO_AURA)} aura) esta semana.` : '🔒 Limite semanal atingido. Volte na próxima semana!'}
-        </div>
-      </div>
+      ${trilhaCardHtml()}
 
       ${cards}
     </div>`;
@@ -10557,12 +10503,6 @@ async function abrirAtividade(id){
   if(_abrindoAtividade) return; // duplo toque não abre duas vezes
   _abrindoAtividade = true;
   try{
-
-  const ap = getAtividadePontos();
-  if(ap.pontos >= getWeeklyAtividadeCap()){
-    showNotif('🔒 Você atingiu o limite de pontos desta semana.');
-    return;
-  }
 
   // v13 — TRAVA DE 2X POR SEMANA. Primeiro o contador (local ou o que veio
   // do servidor), depois a reserva no servidor, que é quem decide de fato.
@@ -10783,12 +10723,7 @@ function fecharAtividade(){
       registrarTrilhaAtividade(data); // v13 — trilha de quest, independente da aura
 
       const ap = getAtividadePontos();
-      const espacoRestante = getWeeklyAtividadeCap() - ap.pontos;
-      if(espacoRestante <= 0){
-        showNotif('🔒 Limite semanal de pontos atingido.');
-        return;
-      }
-      const pontosValidos = Math.min(delta, espacoRestante);
+      const pontosValidos = delta; // v13.1 — sem mais teto semanal de pontos/aura
       const auraGanha = pontosValidos * ATIVIDADE_PTS_TO_AURA;
 
       ap.pontos += pontosValidos;
@@ -12057,6 +11992,9 @@ function renderRegrasContent(){
           • Perguntas e alternativas embaralham a cada tentativa, então decorar a sequência não ajuda.
           <br><br>
           <span style="color:var(--gold)">⚠️ O sistema detecta clique automático/robô e clique muito rápido demais — se acontecer, a resposta trava por um instante. É proteção contra trapaça, não é bug.</span>
+        </div>
+        <div style="background:rgba(255,92,92,.1);border:1.5px solid var(--red2);border-radius:var(--r);padding:10px 14px;margin-top:10px;font-size:12px;color:var(--red2);line-height:1.6">
+          📌 <strong>Pode minimizar sem medo</strong> — o botão "Minimizar" pausa e some da tela, mas o jogo continua rodando por baixo; toque no chip que aparece pra voltar de onde parou. <strong>Mas se clicar em "✕ Sair", a tentativa é encerrada de vez</strong> — conta como uma das suas 2 aberturas da semana, mesmo que você não tenha terminado.
         </div>
       </div>
 
@@ -13500,6 +13438,35 @@ FORMATO: retorne APENAS um array JSON de strings. Exemplo: ["Sabia que a Rússia
   showNotif(`✅ Pacote gerado: ${todasMensagens.length} mensagens!`);
   setTimeout(() => renderCalvaoCompanheiro(), 1500);
 }
+// v13.1 — Visão Global: colunas clicáveis pra ordenar (setinha ao lado do
+// nome da coluna). Clicar de novo na mesma coluna inverte a direção.
+let _globalSortKey = 'aura';
+let _globalSortDir = 'desc';
+function setGlobalSort(key){
+  if(_globalSortKey === key){ _globalSortDir = _globalSortDir === 'desc' ? 'asc' : 'desc'; }
+  else { _globalSortKey = key; _globalSortDir = (key==='nome'||key==='turma') ? 'asc' : 'desc'; }
+  _globalRankPage = 1;
+  refreshGlobalView();
+}
+function globalSortVal(a, key){
+  switch(key){
+    case 'nome': return (a.char?.apelido || a.nome || '').toLowerCase();
+    case 'turma': return (a.turma || '').toLowerCase();
+    case 'aura': return parseAura(a.aura);
+    case 'quest': return questsDoAluno(a);
+    case 'streak': return a.streak || 0;
+    case 'coracoes': return feRecebidosDe(a.login) || 0;
+    default: return 0;
+  }
+}
+function globalSortArrow(key){
+  if(_globalSortKey !== key) return '<span style="opacity:.3">↕</span>';
+  return _globalSortDir === 'desc' ? '▼' : '▲';
+}
+function globalSortHead(key, label, extraStyle){
+  return `<div onclick="setGlobalSort('${key}')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:3px;${extraStyle||''}" title="Ordenar por ${label}">${label} ${globalSortArrow(key)}</div>`;
+}
+
 async function openGlobalView(){
   CTid=null; renderSB();
   _globalRankPage = 1; // sempre começa na página 1
@@ -13747,7 +13714,13 @@ function exportAulasNotas(){
 }
 
 function renderGlobalViewContent(todosAlunos){
-  todosAlunos.sort((a,b)=>parseAura(b.aura)-parseAura(a.aura));
+  todosAlunos.sort((a,b)=>{
+    const va = globalSortVal(a, _globalSortKey), vb = globalSortVal(b, _globalSortKey);
+    let cmp;
+    if(typeof va === 'string') cmp = va.localeCompare(vb, 'pt-BR');
+    else cmp = va - vb;
+    return _globalSortDir === 'desc' ? -cmp : cmp;
+  });
   
   // PATCH 9.2 — Filtro de busca por nome
   const searchTerm = (window._globalSearch || '').toLowerCase().trim();
@@ -13828,10 +13801,15 @@ function renderGlobalViewContent(todosAlunos){
       <!-- RANKING GLOBAL -->
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden">
         <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;gap:8px;text-transform:uppercase;letter-spacing:.5px">
-          <div style="width:40px">#</div><div style="flex:1">Aluno</div>
-          <div style="width:120px">Turma</div><div style="width:100px;text-align:right">Aura</div>
-          <div style="width:80px;text-align:center">Status</div><div style="width:50px;text-align:center">🔥</div>
-          <div style="width:46px;text-align:center">💜</div><div style="width:40px"></div>
+          <div style="width:40px">#</div>
+          <div style="flex:1">${globalSortHead('nome','Aluno')}</div>
+          <div style="width:120px">${globalSortHead('turma','Turma')}</div>
+          <div style="width:70px;text-align:right">${globalSortHead('quest','🏅',"justify-content:flex-end")}</div>
+          <div style="width:100px;text-align:right">${globalSortHead('aura','Aura',"justify-content:flex-end")}</div>
+          <div style="width:80px;text-align:center">Status</div>
+          <div style="width:50px;text-align:center">${globalSortHead('streak','🔥',"justify-content:center")}</div>
+          <div style="width:46px;text-align:center">${globalSortHead('coracoes','💜',"justify-content:center")}</div>
+          <div style="width:40px"></div>
         </div>
         ${pageAlunos.length?pageAlunos.map((a,localIdx)=>{
           const i = startIdx + localIdx; // posição global no ranking
@@ -13849,6 +13827,7 @@ function renderGlobalViewContent(todosAlunos){
               </div>
             </div>
             <div style="width:120px;font-size:11px;color:var(--muted2)">${a.turma}<br><span style="font-size:10px;color:var(--muted)">${a.disc}</span></div>
+            <div style="width:70px;text-align:right;font-family:'Orbitron',monospace;font-weight:700;font-size:13px;color:var(--gold)">🏅 ${questsDoAluno(a)}</div>
             <div style="width:100px;text-align:right;font-family:'Orbitron',monospace;font-weight:700;font-size:13px;color:${c}">${fmtAura(a.aura)}</div>
             <div style="width:80px;text-align:center"><span class="pill" style="background:${auraStatusBg(a)};color:${c};font-size:9px">${auraStatus(a)}</span></div>
             <div style="width:50px;text-align:center;color:var(--gold);font-size:12px">${a.streak||0}🔥</div>
