@@ -999,6 +999,14 @@ body{
 .btn-sm{ font-size:11.5px; }
 /* Inputs e textareas com texto mais confortável */
 input, textarea, select{ font-size:14px; }
+/* v13.3 — no celular o cabeçalho da atividade apertava e os botões
+   "📌 Minimizar" / "✕ Sair" ficavam espremidos (ou fora da tela nos
+   aparelhos mais estreitos). Aqui eles encolhem em vez de sumir. */
+@media (max-width: 480px){
+  .ativ-fs-head{ padding:8px 10px !important; gap:6px !important; }
+  .ativ-fs-head button{ padding:7px 10px !important; font-size:12px !important; }
+  .ativ-fs-titulo{ font-size:12px !important; }
+}
 </style>
 </head>
 <body>
@@ -2606,6 +2614,15 @@ async function doLoginAluno(){
       atividades: data.professor.atividades || [],  // PATCH 9.4
       calvaoPacote: data.professor.calvaoPacote || {}  // PATCH 9.5 — pacote do mascote
     };
+    // v13.3 — guarda o pacote do PROFESSOR exatamente como veio do login.
+    // É nele que o painel Eventos grava de verdade (save-profile →
+    // professores.calvao_pacote): cap semanal do Calvão, Farme Elegante,
+    // níveis de quest, mensagens do mascote. Logo abaixo,
+    // aplicarDisciplinaAluno() trocava esse pacote inteiro pelo da
+    // disciplina (disciplinas.calvao_pacote) — uma tabela que NENHUMA tela
+    // do professor grava — e era por isso que nada do que ele configurava
+    // chegava ao aluno.
+    window._pacoteProfLogin = data.professor.calvaoPacote || {};
     
     // v11 — o servidor ja diz no login se o FARME esta aberto agora
     FARME_ACESSO = data.acesso || { aberta:true, porToken:false, minutosRestantes:0 };
@@ -2906,16 +2923,25 @@ function aplicarDisciplinaAluno(discId){
   if(currentProf){
     currentProf.disciplina    = d.nome;
     currentProf.atividades    = ct.atividades || [];
-    // v13.3 — d.capSemanal é um campo LEGADO por-disciplina (disciplinas.cap_semanal)
-    // que nenhuma tela do professor grava mais; o cap de verdade vive em
-    // calvao_pacote.capSemanalCalvao (painel Eventos → "Cap semanal"). Antes,
-    // este Object.assign sobrescrevia SEMPRE com d.capSemanal — como a coluna
-    // legada fica null pra sempre, o servidor devolvia o antigo padrão de 12
-    // (server-side) e isso apagava, a cada login/troca de disciplina, o valor
-    // que o professor de fato configurou. Só sobrescreve quando d.capSemanal
-    // for um número de verdade (uso futuro/legado), nunca com null.
-    const capLegadoOverride = (typeof d.capSemanal === 'number') ? {capSemanalCalvao: d.capSemanal} : {};
-    currentProf.calvaoPacote  = Object.assign({}, ct.calvaoPacote||{}, capLegadoOverride);
+    // v13.3 — MONTA O PACOTE DO ALUNO EM CAMADAS:
+    //  1) base: o pacote do PROFESSOR (professores.calvao_pacote) — o único
+    //     que o painel Eventos realmente grava;
+    //  2) por cima: o pacote da DISCIPLINA (disciplinas.calvao_pacote), pra
+    //     não quebrar o desenho multi-disciplina; hoje nenhuma tela grava
+    //     nele, então na prática vem vazio e não atrapalha;
+    //  3) o CAP SEMANAL do Calvão é caso à parte: só existe tela pra ele no
+    //     painel do professor, então o valor dele manda SEMPRE — inclusive
+    //     o 0, que é como o "desativar teto" fica guardado.
+    // Antes, este Object.assign jogava fora o pacote do professor inteiro e
+    // ficava só com o da disciplina + o campo legado cap_semanal (que vinha
+    // 12 do servidor). Era isso que prendia todo aluno em 12,000 por mais
+    // que o professor mudasse o valor ou desativasse o teto.
+    const pacoteProf  = window._pacoteProfLogin || {};
+    const pacoteAluno = Object.assign({}, pacoteProf, ct.calvaoPacote||{});
+    if('capSemanalCalvao' in pacoteProf) pacoteAluno.capSemanalCalvao = pacoteProf.capSemanalCalvao;
+    // campo legado por disciplina: só vale se um dia tiver número de verdade
+    if(typeof d.capSemanal === 'number') pacoteAluno.capSemanalCalvao = d.capSemanal;
+    currentProf.calvaoPacote  = pacoteAluno;
   }
   try{ localStorage.setItem('aluno_disc_ativa', d.id); }catch(e){}
 }
@@ -10808,8 +10834,11 @@ async function abrirAtividade(id){
   // recarregar do zero (recarregar apagaria o progresso do jogo).
   // Vem ANTES de tudo: voltar pra uma atividade pausada não gasta tentativa.
   const jaAberta = document.getElementById('atividade-fullscreen');
-  if(jaAberta && window._atividadeAtual === id && jaAberta.style.display === 'none'){
-    restaurarAtividadeMinimizada();
+  if(jaAberta && window._atividadeAtual === id){
+    // v13.3 — vale pra minimizada E pra já aberta. Antes, clicar de novo numa
+    // atividade que já estava aberta recriava o iframe do zero: o aluno perdia
+    // o progresso do jogo e ainda parecia que tinha "travado".
+    if(jaAberta.style.display === 'none') restaurarAtividadeMinimizada();
     return;
   }
 
@@ -10824,6 +10853,7 @@ async function abrirAtividade(id){
     return;
   }
   let semanaAtiv = null;
+  let reaproveitada = false; // v13.3 — clique repetido dentro dos 30s
   try{
     const rIni = await fetch(`${API_BASE}/api/student?action=atividade-iniciar`,{
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -10837,7 +10867,11 @@ async function abrirAtividade(id){
       renderAContent();
       return;
     }
-    if(rIni.ok){ semanaAtiv = dIni.semana || null; window._atividadeTentativa = dIni.tentativa || 1; }
+    if(rIni.ok){
+      semanaAtiv = dIni.semana || null;
+      window._atividadeTentativa = dIni.tentativa || 1;
+      reaproveitada = !!dIni.reaproveitada; // servidor devolveu a MESMA tentativa
+    }
   }catch(e){
     // Sem servidor (rede caiu, SQL do v13 ainda não rodado): segue com a
     // contagem local — melhor deixar jogar do que travar por engano.
@@ -10852,11 +10886,15 @@ async function abrirAtividade(id){
   // tela, e cada clique "gasta" uma das 2 tentativas da semana mesmo assim.
   const ap = getAtividadePontos();
 
-  // Conta o uso localmente também, pra tela reagir na hora
-  ap.usos[id] = (ap.usos[id] || 0) + 1;
-  if(ATIV_USOS_SERVIDOR) ATIV_USOS_SERVIDOR[id] = ap.usos[id];
-  CU.atividadesPontos = ap;
-  persistirProgressoAluno({ atividadesPontos: ap });
+  // Conta o uso localmente também, pra tela reagir na hora — mas NÃO quando o
+  // servidor avisou que reaproveitou a tentativa (clique repetido em menos de
+  // 30s): ali é a mesma tentativa, não pode aparecer como 2/2 na tela.
+  if(!reaproveitada){
+    ap.usos[id] = (ap.usos[id] || 0) + 1;
+    if(ATIV_USOS_SERVIDOR) ATIV_USOS_SERVIDOR[id] = ap.usos[id];
+    CU.atividadesPontos = ap;
+    persistirProgressoAluno({ atividadesPontos: ap });
+  }
 
   window._atividadeSemana = semanaAtiv;
   window._atividadeAtual = id;
@@ -10875,11 +10913,11 @@ async function abrirAtividade(id){
   overlay.id = 'atividade-fullscreen';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0a0e12;display:flex;flex-direction:column';
   overlay.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg2);border-bottom:1.5px solid var(--purple2);flex-shrink:0">
+    <div class="ativ-fs-head" style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg2);border-bottom:1.5px solid var(--purple2);flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px;min-width:0">
         <span style="font-size:22px">${atividade.emoji||'🎮'}</span>
         <div style="min-width:0">
-          <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${atividade.nome}</div>
+          <div class="ativ-fs-titulo" style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${atividade.nome}</div>
           <div style="font-size:10px;color:var(--muted)">💡 Pontuação registrada automaticamente · 1.000 pts = 1,000 aura</div>
         </div>
       </div>
