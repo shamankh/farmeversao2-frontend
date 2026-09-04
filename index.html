@@ -2938,9 +2938,17 @@ function aplicarDisciplinaAluno(discId){
     // que o professor mudasse o valor ou desativasse o teto.
     const pacoteProf  = window._pacoteProfLogin || {};
     const pacoteAluno = Object.assign({}, pacoteProf, ct.calvaoPacote||{});
+    // O CAP SEMANAL tem UMA fonte só: o painel Eventos do professor. Se ele
+    // configurou algo (inclusive 0, que é como "desativar teto" fica
+    // guardado), vale isso. Se nunca configurou, o campo é APAGADO — e sem
+    // campo vale o padrão da v13.1: sem teto.
     if('capSemanalCalvao' in pacoteProf) pacoteAluno.capSemanalCalvao = pacoteProf.capSemanalCalvao;
-    // campo legado por disciplina: só vale se um dia tiver número de verdade
-    if(typeof d.capSemanal === 'number') pacoteAluno.capSemanalCalvao = d.capSemanal;
+    else delete pacoteAluno.capSemanalCalvao;
+    // d.capSemanal (coluna legada disciplinas.cap_semanal) é IGNORADO de
+    // propósito: nenhuma tela grava nele, ele está vazio pra todo mundo, e o
+    // backend antigo inventava 12 quando o encontrava vazio. Era esse 12
+    // fantasma que prendia o aluno. Ignorando-o aqui, a correção passa a
+    // funcionar SÓ com o frontend publicado — não depende do backend.
     currentProf.calvaoPacote  = pacoteAluno;
   }
   try{ localStorage.setItem('aluno_disc_ativa', d.id); }catch(e){}
@@ -6014,6 +6022,10 @@ async function feRefreshSnapshot(){
     if(data && data.professor){
       if(!currentProf) currentProf = {};
       currentProf.calvaoPacote = data.professor.calvaoPacote || currentProf.calvaoPacote || {};
+      // v13.3 — mantém a cópia de referência do pacote do professor em dia:
+      // sem isto, uma troca de disciplina depois deste refresh voltaria pro
+      // valor que veio no login.
+      window._pacoteProfLogin = data.professor.calvaoPacote || window._pacoteProfLogin || {};
       // Só sincroniza a aura se NÃO houver missão ativa (evita atropelar aura local recém-ganha)
       // v11 — so aceita a aura do servidor se NAO houver gravacao local pendente.
       // Antes, este refresh sobrescrevia a aura recem-ganha por um valor velho
@@ -12359,7 +12371,7 @@ function renderRegrasContent(){
   return `
     <div>
       <div style="font-family:'Orbitron',monospace;font-size:20px;font-weight:900;margin-bottom:4px">📖 Regras do Jogo</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Tudo que você precisa saber sobre o Farme Aura - Versão Loja — Patch 10.0</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Tudo que você precisa saber sobre o Farme Aura - Versão Loja — Patch 10.1 · build 04/09</div>
 
       ${evt?`<div style="background:linear-gradient(135deg,rgba(240,180,41,.15),rgba(124,92,252,.15));border:1.5px solid var(--gold);border-radius:var(--r2);padding:14px 16px;margin-bottom:14px;font-size:13px">
         <div style="font-family:'Orbitron',monospace;font-weight:900;color:var(--gold);margin-bottom:4px">🎪 EVENTO ATIVO — +${evt.multiplier-1}x BÔNUS</div>
