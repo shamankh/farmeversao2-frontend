@@ -2906,7 +2906,16 @@ function aplicarDisciplinaAluno(discId){
   if(currentProf){
     currentProf.disciplina    = d.nome;
     currentProf.atividades    = ct.atividades || [];
-    currentProf.calvaoPacote  = Object.assign({}, ct.calvaoPacote||{}, {capSemanalCalvao: d.capSemanal});
+    // v13.3 — d.capSemanal é um campo LEGADO por-disciplina (disciplinas.cap_semanal)
+    // que nenhuma tela do professor grava mais; o cap de verdade vive em
+    // calvao_pacote.capSemanalCalvao (painel Eventos → "Cap semanal"). Antes,
+    // este Object.assign sobrescrevia SEMPRE com d.capSemanal — como a coluna
+    // legada fica null pra sempre, o servidor devolvia o antigo padrão de 12
+    // (server-side) e isso apagava, a cada login/troca de disciplina, o valor
+    // que o professor de fato configurou. Só sobrescreve quando d.capSemanal
+    // for um número de verdade (uso futuro/legado), nunca com null.
+    const capLegadoOverride = (typeof d.capSemanal === 'number') ? {capSemanalCalvao: d.capSemanal} : {};
+    currentProf.calvaoPacote  = Object.assign({}, ct.calvaoPacote||{}, capLegadoOverride);
   }
   try{ localStorage.setItem('aluno_disc_ativa', d.id); }catch(e){}
 }
@@ -10835,6 +10844,14 @@ async function abrirAtividade(id){
     console.warn('atividade-iniciar:', e);
   }
 
+  // v13.3 — BUG REAL ENCONTRADO: "ap" nunca era declarada aqui dentro.
+  // Toda vez que um aluno clicava em jogar, o código chegava até aqui e
+  // estourava "ap is not defined" — DEPOIS de já ter reservado a tentativa
+  // no servidor (atividade-iniciar, logo acima) e ANTES de criar o iframe
+  // do jogo. Resultado exato do que foi reportado: o jogo nunca aparece na
+  // tela, e cada clique "gasta" uma das 2 tentativas da semana mesmo assim.
+  const ap = getAtividadePontos();
+
   // Conta o uso localmente também, pra tela reagir na hora
   ap.usos[id] = (ap.usos[id] || 0) + 1;
   if(ATIV_USOS_SERVIDOR) ATIV_USOS_SERVIDOR[id] = ap.usos[id];
@@ -10878,7 +10895,59 @@ async function abrirAtividade(id){
   document.body.style.overflow = 'hidden';
   renderChipAtividadeMinimizada(); // some se tiver ficado de uma minimização anterior
 
+  // v13.3 — SE O JOGO NUNCA CONFIRMAR QUE CARREGOU (FARME_ATIVIDADE_PRONTA),
+  // devolve a tentativa em vez de deixar o aluno "queimar" as 2 da semana
+  // numa tela em branco. 15s dá folga de sobra pra qualquer jogo real (o
+  // postMessage de pronto costuma chegar em menos de 1s depois do onload).
+  window._atividadeCarregou = false;
+  if(window._atividadeLoadTimeout) clearTimeout(window._atividadeLoadTimeout);
+  window._atividadeLoadTimeout = setTimeout(() => {
+    if(window._atividadeCarregou) return; // carregou a tempo, nada a fazer
+    if(window._atividadeAtual !== id) return; // aluno já saiu/trocou de atividade
+    atividadeFalhouAoCarregar(id, semanaAtiv, window._atividadeTentativa);
+  }, 15000);
+
   } finally { _abrindoAtividade = false; }
+}
+
+// v13.3 — devolve a tentativa reservada (local + servidor) e avisa o aluno,
+// sem contar como uma das 2 tentativas da semana. Fecha a tela travada pra
+// ele poder tentar de novo na hora (rede instável, GitHub Pages fora do ar
+// etc.) em vez de esperar o reset semanal.
+async function atividadeFalhouAoCarregar(id, semana, tentativa){
+  showNotif('⚠️ O jogo não carregou. Sua tentativa foi devolvida — pode tentar de novo.');
+
+  // desfaz a contagem local pra tela refletir na hora (mesma função usada
+  // em abrirAtividade, já cuida do reset semanal se a virada aconteceu
+  // entre um clique e outro)
+  const ap = getAtividadePontos();
+  ap.usos[id] = Math.max(0, (ap.usos[id] || 0) - 1);
+  if(window.ATIV_USOS_SERVIDOR) ATIV_USOS_SERVIDOR[id] = ap.usos[id];
+  CU.atividadesPontos = ap;
+  persistirProgressoAluno({ atividadesPontos: ap });
+
+  // desfaz a reserva no servidor (a fonte da verdade pro trava de 2x)
+  if(semana && tentativa){
+    try{
+      await fetch(`${API_BASE}/api/student?action=atividade-cancelar`,{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ login: studentLogin||CU.login, senha: studentSenha||CU.senha,
+                               atividadeId: id, semana, tentativa })
+      });
+    }catch(e){ console.warn('atividade-cancelar:', e); }
+  }
+
+  // fecha a tela travada em branco, sem passar por fecharAtividade() (que
+  // chamaria atividade-finalizar e daria pontos=0 numa tentativa que já
+  // foi cancelada — dados conflitantes na mesma linha do servidor)
+  const overlay = document.getElementById('atividade-fullscreen');
+  if(overlay && window._atividadeAtual === id) overlay.remove();
+  document.body.style.overflow = '';
+  window._atividadeAtual = null;
+  window._atividadeSemana = null;
+  const chip = document.getElementById('ativ-min-chip');
+  if(chip) chip.remove();
+  renderAContent();
 }
 
 // v13 — MINIMIZAR: some da tela sem destruir o iframe (o jogo continua
@@ -10961,6 +11030,10 @@ function fecharAtividade(){
 
     if(data.tipo === 'FARME_ATIVIDADE_PRONTA'){
       console.log('[FARME] Atividade carregada:', data.atividade);
+      // v13.3 — confirma que carregou de verdade: cancela o timeout que ia
+      // devolver a tentativa por "não carregou" (ver abrirAtividade).
+      window._atividadeCarregou = true;
+      if(window._atividadeLoadTimeout){ clearTimeout(window._atividadeLoadTimeout); window._atividadeLoadTimeout = null; }
       // v13 — passa a voz que o aluno já escolheu no Calvão. A atividade
       // roda em iframe de outro domínio e não enxerga o localStorage daqui,
       // então a preferência precisa ir por mensagem.
