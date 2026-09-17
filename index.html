@@ -1685,7 +1685,7 @@ async function aplicarPontuacaoFinal(basePtsRaw, opts={}){
     }
   }
 
-  // v13 — QUEST: nota da sessão acima de 1.800 (de um teto de 2.000) vira
+  // v13 — QUEST: nota da sessão acima da mínima configurada (teto 2.000) vira
   // uma quest PENDENTE pro professor aprovar. Não bloqueia a UI: dispara e
   // segue (se falhar, só fica de fora do painel do professor — não afeta
   // a aura da sessão, que já está garantida pelo fluxo normal abaixo).
@@ -1705,7 +1705,7 @@ async function aplicarPontuacaoFinal(basePtsRaw, opts={}){
     || _calvaoQuestSessaoId
     || (CU.activeMission && CU.activeMission.startedAt
         ? `${CU.login}-inicio-${CU.activeMission.startedAt}` : null);
-  if(notaQuest > 1.800 && questSid){
+  if(notaQuest > getQuestNotaMinima() && questSid && !questGanhosPausados()){
     registrarQuestCalvao(notaQuest, questSid).catch(e=>console.warn('quest-calvao:', e));
   }
 
@@ -4435,7 +4435,7 @@ async function persistirProgressoAluno(campos){
 }
 
 // v13 — QUEST: registra no servidor que esta sessão do Calvão passou de
-// 1.800 de nota. Fica PENDENTE até o professor aprovar (painel Eventos/
+// da nota mínima. Fica PENDENTE até o professor aprovar (painel Eventos/
 // Quests) — isto aqui só avisa o servidor, não credita pontos sozinho.
 // sessaoId é fixo por sessão (gerado em startNewMission): se esta chamada
 // disparar mais de uma vez para a mesma sessão (retry de rede, duplo
@@ -5860,6 +5860,82 @@ async function restaurarCapAtividadePadrao(){
   delete c.capSemanalAtividade;
   await salvarEventos();
   showNotif(`✅ Cap de atividades restaurado ao padrão (${WEEKLY_ATIVIDADE_PTS_CAP} pts).`);
+  openEventos();
+}
+
+// v13.5 — ACESSO AO CALVÃO: 2x por semana (normal), livre ou pausado.
+// Pensado pro fluxo da semana de prova: libera pra estudarem até a véspera,
+// e depois você pausa. Reversível a qualquer momento.
+async function definirAcessoCalvao(modo){
+  const c = cp();
+  if(modo === 'normal') delete c.calvaoAcesso;
+  else c.calvaoAcesso = modo;
+  await salvarEventos();
+  showNotif(modo === 'livre'   ? '♾️ Calvão liberado — sem limite de sessões por semana.'
+          : modo === 'bloqueado'? '🚫 Calvão pausado — os alunos não conseguem abrir sessão.'
+          : '🔁 Calvão de volta ao normal: 2 sessões por aula por semana.');
+  openEventos();
+}
+
+// v13.5 — NOTA MÍNIMA pra uma sessão do Calvão virar ponto de quest.
+async function aplicarNotaMinimaQuest(){
+  const inp = document.getElementById('quest-nota-input');
+  if(!inp) return;
+  const pts = parseInt(String(inp.value).replace(/\D/g,''), 10);   // 1700 → 1,700
+  if(!pts || pts < 1000 || pts >= 2000){
+    showNotif('Valor inválido. Use entre 1.000 e 1.999 (o teto da sessão é 2,000).');
+    return;
+  }
+  const c = cp();
+  const anterior = fmtAura(getQuestNotaMinima());
+  c.questNotaMinima = pts / 1000;
+  await salvarEventos();
+  showNotif(`✅ Nota mínima da quest: ${anterior} → ${fmtAura(pts/1000)}.`);
+  openEventos();
+}
+async function restaurarNotaMinimaQuest(){
+  const c = cp();
+  delete c.questNotaMinima;
+  await salvarEventos();
+  showNotif(`✅ Nota mínima de volta ao padrão (${fmtAura(QUEST_NOTA_MINIMA_PADRAO)}).`);
+  openEventos();
+}
+
+// v13.5 — PAUSAR OS GANHOS DE QUEST sem tirar nada do aluno: ele continua
+// farmando aura, jogando e conversando com o Calvão; só não nasce quest nova
+// enquanto estiver pausado. Vale pro Calvão E pras atividades gamificadas.
+async function alternarQuestPausado(){
+  const c = cp();
+  const pausando = !c.questPausado;
+  if(pausando){
+    if(!confirm('Pausar os ganhos de ponto de quest?\n\nOs alunos continuam farmando aura, jogando e usando o Calvão normalmente — só não ganham quest nova enquanto estiver pausado.\n\nO que eles já têm não some, e a Loja continua funcionando.')) return;
+    c.questPausado = true;
+  } else {
+    delete c.questPausado;
+  }
+  await salvarEventos();
+  showNotif(pausando ? '⏸️ Ganhos de quest pausados — a aura continua normal.'
+                     : '▶️ Ganhos de quest religados.');
+  openEventos();
+}
+
+// v13.4 — LIBERAR / RELIMITAR AS JOGADAS DAS ATIVIDADES GAMIFICADAS.
+// Pensado pra semana de prova bimestral: o professor sobe atividades de
+// revisão e quer que o aluno possa repetir à vontade. Fica ligado até ele
+// desligar (é reversível a qualquer momento, igual à trava da Loja).
+async function alternarLimiteAtividades(){
+  const c = cp();
+  const liberando = !c.atividadesSemLimite;
+  if(liberando){
+    if(!confirm('Liberar as atividades do limite de 2x por semana?\n\nOs alunos vão poder repetir qualquer atividade quantas vezes quiserem — bom pra semana de prova.\n\nA barra de Quest continua contando só as 2 primeiras jogadas da semana, então ninguém ganha quest repetindo.')) return;
+    c.atividadesSemLimite = true;
+  } else {
+    delete c.atividadesSemLimite;
+  }
+  await salvarEventos();
+  showNotif(liberando
+    ? '♾️ Atividades liberadas — o aluno pode repetir à vontade esta semana.'
+    : '🔒 Limite de 2x por semana religado.');
   openEventos();
 }
 
@@ -7480,6 +7556,87 @@ function renderEventosContent(){
           ${!ehPadraoA?`<button class="btn btn-sm" onclick="restaurarCapAtividadePadrao()" style="border-color:rgba(240,180,41,.4);color:var(--gold)">↩️ Padrão (${WEEKLY_ATIVIDADE_PTS_CAP})</button>`:''}
         </div>
         <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 Vale para o aluno no próximo login ou ao abrir a aba 🎮 Atividades ou 🎯 Missão.</div>
+      </div>`;
+    })()}
+
+    <!-- v13.5 — ACESSO AO CALVÃO -->
+    ${(()=>{
+      const modo = calvaoAcessoModo();
+      const cor = modo==='livre' ? 'var(--gold)' : modo==='bloqueado' ? 'var(--red2)' : 'var(--purple2)';
+      const rotulo = modo==='livre' ? 'SEM LIMITE' : modo==='bloqueado' ? 'PAUSADO' : '2x por semana';
+      const btn = (m, txt, ativo) => `<button class="btn btn-sm" onclick="definirAcessoCalvao('${m}')" ${ativo?'disabled':''}
+        style="${ativo?'opacity:.5;':''}font-weight:700">${txt}</button>`;
+      return `<div class="card" style="margin-bottom:18px;border-color:${modo==='normal'?'rgba(124,92,252,.35)':modo==='livre'?'rgba(240,180,41,.5)':'rgba(229,62,62,.5)'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:22px">${modo==='livre'?'♾️':modo==='bloqueado'?'🚫':'🤖'}</span>
+          <strong style="font-size:15px;flex:1">Acesso ao Calvão de crIA</strong>
+          <span class="pill" style="background:rgba(255,255,255,.06);color:${cor};font-weight:800">${rotulo}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:12px">
+          Normalmente cada aula pode ser farmada <strong>2 vezes por semana</strong>. Na semana de prova, libere pra turma estudar à vontade; depois da prova, pause se quiser.
+          ${modo==='livre'?'<br><strong style="color:var(--gold)">Agora está liberado</strong> — lembre de voltar ao normal depois.':''}
+          ${modo==='bloqueado'?'<br><strong style="color:var(--red2)">Agora está pausado</strong> — nenhum aluno consegue abrir sessão do Calvão.':''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${btn('normal','🔁 Normal (2x)', modo==='normal')}
+          ${btn('livre','♾️ Liberar sem limite', modo==='livre')}
+          ${btn('bloqueado','🚫 Pausar o Calvão', modo==='bloqueado')}
+        </div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 Vale para o aluno no próximo login ou ao abrir a aba 🎯 Missão.</div>
+      </div>`;
+    })()}
+
+    <!-- v13.5 — ECONOMIA DE QUEST: nota mínima + pausa dos ganhos -->
+    ${(()=>{
+      const minimo = getQuestNotaMinima();
+      const ehPadraoQ = !(typeof cp().questNotaMinima === 'number');
+      const pausado = !!cp().questPausado;
+      return `<div class="card" style="margin-bottom:18px;border-color:${pausado?'rgba(229,62,62,.45)':'rgba(240,180,41,.4)'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:22px">${pausado?'⏸️':'🏅'}</span>
+          <strong style="font-size:15px;flex:1">Ganho de pontos de Quest</strong>
+          <span class="pill" style="background:rgba(240,180,41,.12);color:var(--gold);font-weight:800">mínimo ${fmtAura(minimo)}${ehPadraoQ?' (padrão)':''}</span>
+          ${pausado?`<span class="pill" style="background:rgba(229,62,62,.14);color:var(--red2);font-weight:800">PAUSADO</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:12px">
+          Uma sessão do Calvão vira <strong>1 ponto de quest</strong> quando passa da nota mínima (o teto da sessão é 2,000).
+          ${pausado
+            ? '<br><strong style="color:var(--red2)">Ganhos pausados:</strong> os alunos continuam farmando aura, jogando e usando o Calvão — só não nasce quest nova. O que eles já têm continua valendo, e a Loja segue funcionando.'
+            : '<br>Pausar os ganhos é o jeito de deixar todo mundo estudar à vontade sem inflacionar a Loja depois da prova.'}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <input id="quest-nota-input" type="number" min="1000" max="1999" step="50" value="${Math.round(minimo*1000)}"
+            style="width:120px;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:14px;font-family:'Orbitron',monospace;font-weight:700"/>
+          <span style="font-size:11px;color:var(--muted)">de 2.000</span>
+          <button class="btn btn-sm" onclick="aplicarNotaMinimaQuest()" style="border-color:rgba(240,180,41,.5);color:var(--gold);font-weight:700">✅ Aplicar</button>
+          ${!ehPadraoQ?`<button class="btn btn-sm" onclick="restaurarNotaMinimaQuest()" style="border-color:rgba(124,92,252,.4);color:var(--purple2)">↩️ Padrão (${fmtAura(QUEST_NOTA_MINIMA_PADRAO)})</button>`:''}
+        </div>
+        <button class="btn btn-sm" onclick="alternarQuestPausado()" style="border-color:${pausado?'rgba(74,222,128,.5)':'rgba(229,62,62,.45)'};color:${pausado?'var(--green2)':'var(--red2)'};font-weight:700">
+          ${pausado?'▶️ Religar os ganhos de quest':'⏸️ Pausar os ganhos de quest'}
+        </button>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 A pausa vale para o Calvão <strong>e</strong> para as atividades gamificadas.</div>
+      </div>`;
+    })()}
+
+    <!-- v13.4 — LIMITE DE JOGADAS POR ATIVIDADE (semana de prova) -->
+    ${(()=>{
+      const semLim = !!cp().atividadesSemLimite;
+      return `<div class="card" style="margin-bottom:18px;border-color:${semLim?'rgba(240,180,41,.5)':'rgba(124,92,252,.35)'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:22px">${semLim?'♾️':'🔁'}</span>
+          <strong style="font-size:15px;flex:1">Quantas vezes o aluno pode jogar cada atividade</strong>
+          <span class="pill" style="background:${semLim?'rgba(240,180,41,.14)':'rgba(124,92,252,.14)'};color:${semLim?'var(--gold)':'var(--purple2)'};font-weight:800">${semLim?'SEM LIMITE':'2x por semana'}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:12px">
+          ${semLim
+            ? 'Cada aluno pode repetir qualquer atividade <strong>quantas vezes quiser</strong>. É o modo pra semana de prova, com as atividades de revisão. <strong>Lembre de religar o limite depois</strong> — fica assim até você desligar.'
+            : 'Cada atividade pode ser jogada <strong>2 vezes por semana</strong> por aluno. Na semana de prova, libere pra turma poder revisar à vontade.'}
+          <br><span style="color:var(--muted)">A barra de Quest não muda: mesmo sem limite, só as <strong>2 primeiras</strong> jogadas da semana contam pra trilha — repetir vira treino, não vira ponto de quest.</span>
+        </div>
+        <button class="btn btn-sm" onclick="alternarLimiteAtividades()" style="border-color:${semLim?'rgba(124,92,252,.5)':'rgba(240,180,41,.5)'};color:${semLim?'var(--purple2)':'var(--gold)'};font-weight:700">
+          ${semLim?'🔒 Voltar ao limite de 2x':'♾️ Liberar sem limite'}
+        </button>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">💡 Vale para o aluno no próximo login ou ao abrir a aba 🎮 Atividades.</div>
       </div>`;
     })()}
 
@@ -10013,7 +10170,7 @@ function pintarQuestAluno(){
 
 function questAlunoOrigem(ev){
   return ({
-    'calvao-1800':'🤖 Sessão do Calvão acima de 1,800',
+    'calvao-1800':'🤖 Sessão do Calvão com nota alta',
     'atividades-80pct':'🎮 Atividades gamificadas',
     'manual-individual':'🏅 Dada pelo professor',
     'manual-turma':'🏅 Dada para a turma toda'
@@ -10173,7 +10330,7 @@ function renderQuestAlunoInner(){
           ${e.status==='aprovado'?'✅':'⏳'}</span>
       </div>`).join('')}
     </div>` : `<div class="card" style="margin-top:18px"><div class="card-t">📜 De onde vieram suas quests</div>
-      <div style="font-size:12.5px;color:var(--muted2);line-height:1.7">Você ainda não tem quests. Uma sessão do Calvão com nota acima de <strong>1,800</strong> vira uma quest — e o professor também pode te dar por participação em aula.</div></div>`;
+      <div style="font-size:12.5px;color:var(--muted2);line-height:1.7">Você ainda não tem quests. Uma sessão do Calvão com nota acima de <strong>${fmtAura(getQuestNotaMinima())}</strong> vira uma quest — e o professor também pode te dar por participação em aula.</div></div>`;
 
   return topo + trilhaCardHtml() + cardTarefas + `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
@@ -10367,7 +10524,8 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
   // Grid de seleção de aulas (FARME v2: contador semanal)
   const aulasUsadas = CU.aulasUsadas || {};
   const bimKey = farmeSemanaAtual();
-  const MAX_USOS = 2;
+  const modoCalvao = calvaoAcessoModo();      // v13.5
+  const MAX_USOS = calvaoMaxUsosAula();
   
   // Monta grid de aulas
   let gridHTML = '';
@@ -10378,9 +10536,11 @@ function renderStartMissionCard(semCoracao, calvaoCapBatido, calvaoBloqueado, ca
     const cor = bloqueada ? 'rgba(229,62,62,.1)' : usos === 1 ? 'rgba(240,180,41,.1)' : 'rgba(124,92,252,.08)';
     const bordaCor = bloqueada ? 'rgba(229,62,62,.3)' : usos === 1 ? 'rgba(240,180,41,.3)' : 'rgba(124,92,252,.25)';
     const textoCor = bloqueada ? 'var(--red2)' : usos === 1 ? 'var(--gold)' : 'var(--purple2)';
-    const status = bloqueada ? '🔒 2/2' : usos === 1 ? '⚠️ 1/2' : '✅ 0/2';
+    const status = modoCalvao === 'bloqueado' ? '🚫 off'
+      : modoCalvao === 'livre' ? '♾️ livre'
+      : bloqueada ? '🔒 2/2' : usos === 1 ? '⚠️ 1/2' : '✅ 0/2';
     gridHTML += `
-      <button onclick="${bloqueada ? 'showNotif(\"Esta aula já foi farmada 2x esta semana. Libera segunda às 6h!\")' : `selecionarAula(${i})`}"
+      <button onclick="${bloqueada ? (modoCalvao === 'bloqueado' ? 'showNotif(\"🚫 O professor pausou o Calvão por enquanto.\")' : 'showNotif(\"Esta aula já foi farmada 2x esta semana. Libera segunda às 6h!\")') : `selecionarAula(${i})`}"
         style="background:${cor};border:1.5px solid ${bordaCor};border-radius:var(--r);padding:12px 8px;cursor:${bloqueada?'not-allowed':'pointer'};text-align:center;transition:.15s;${bloqueada?'opacity:.6':''}">
         <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:${textoCor}">Aula ${i}</div>
         <div style="font-size:10px;color:${textoCor};margin-top:4px;font-weight:700">${status}</div>
@@ -10502,7 +10662,12 @@ async function confirmStartMission(numAula){
     // Confere primeiro o contador local (barato e sem efeito colateral).
     if(!CU.aulasUsadas) CU.aulasUsadas = {};
     const usos = (CU.aulasUsadas[key] || 0) + 1;
-    if(usos > 2){
+    const maxAula = calvaoMaxUsosAula();   // v13.5 — livre/bloqueado/normal
+    if(calvaoAcessoModo() === 'bloqueado'){
+      showNotif('🚫 O professor pausou o Calvão por enquanto.');
+      return;
+    }
+    if(usos > maxAula){
       showNotif('🔒 Esta aula já foi farmada 2 vezes esta semana. Escolha outra aula!');
       return;
     }
@@ -10539,7 +10704,7 @@ async function confirmStartMission(numAula){
     // Persiste no servidor AGORA. O servidor funde com o que ja existe e
     // devolve o mapa oficial — por isso reconferimos o limite DEPOIS.
     await persistirProgressoAluno({ aulasUsadas: CU.aulasUsadas, farmHistorico: CU.farmHistorico });
-    if((CU.aulasUsadas[key] || 0) > 2){
+    if((CU.aulasUsadas[key] || 0) > maxAula){
       showNotif('🔒 Esta aula ja foi farmada 2 vezes esta semana (contando outros aparelhos). Escolha outra aula!');
       renderAContent();
       return;
@@ -10734,6 +10899,41 @@ function trilhaCardHtml(){
 // e a reserva no servidor (que é quem realmente decide). O servidor é a
 // verdade — por isso os usos são recarregados dele ao abrir a aba.
 const ATIVIDADE_MAX_USOS = 2;
+// v13.4 — o professor pode liberar as atividades do limite de 2x por semana
+// (época de prova, quando ele sobe atividades de revisão). A flag mora no
+// calvaoPacote, mesmo caminho do teto do Calvão: já chega ao aluno no login.
+// A trilha de Quest NÃO muda — o servidor continua aceitando só as tentativas
+// 1 e 2, então repetir é treino, nunca ponto de quest extra.
+// v13.5 — ACESSO AO CALVÃO: 'normal' (2x/semana), 'livre' (sem limite) ou
+// 'bloqueado' (pausado). Mora no calvaoPacote, igual aos outros controles.
+function calvaoAcessoModo(){
+  const v = currentProf && currentProf.calvaoPacote && currentProf.calvaoPacote.calvaoAcesso;
+  return (v === 'livre' || v === 'bloqueado') ? v : 'normal';
+}
+function calvaoMaxUsosAula(){
+  const m = calvaoAcessoModo();
+  return m === 'livre' ? Infinity : m === 'bloqueado' ? 0 : 2;
+}
+// v13.5 — nota mínima da sessão do Calvão pra virar ponto de quest.
+// Era fixa em 1,800 no código; agora o professor ajusta no painel Eventos.
+// 17/09 — era 1.800 desde o começo; o Christopher pediu 1,700 (semana de
+// prova). Continua ajustável pelo painel Eventos a qualquer momento.
+const QUEST_NOTA_MINIMA_PADRAO = 1.700;
+function getQuestNotaMinima(){
+  const v = currentProf && currentProf.calvaoPacote && currentProf.calvaoPacote.questNotaMinima;
+  return (typeof v === 'number' && v > 0 && v < 2) ? v : QUEST_NOTA_MINIMA_PADRAO;
+}
+// v13.5 — ganhos de quest pausados: o aluno continua farmando aura e jogando
+// normalmente, só não nasce quest nova (nem do Calvão, nem das atividades).
+function questGanhosPausados(){
+  return !!(currentProf && currentProf.calvaoPacote && currentProf.calvaoPacote.questPausado);
+}
+function atividadesSemLimite(){
+  return !!(currentProf && currentProf.calvaoPacote && currentProf.calvaoPacote.atividadesSemLimite);
+}
+function getAtividadeMaxUsos(){
+  return atividadesSemLimite() ? Infinity : ATIVIDADE_MAX_USOS;
+}
 let ATIV_USOS_SERVIDOR = null; // {atividadeId: n} vindo do servidor
 
 // v13 — selo de "já validou na trilha" no card da atividade
@@ -10800,7 +11000,8 @@ function renderAtividadesContent(){
         const jaJogou = ap.log.filter(l => l.id === a.id);
         const totalGanho = jaJogou.reduce((s,l) => s + (l.pontos||0), 0);
         const usos = atividadeUsosDe(a.id);
-        const travada = usos >= ATIVIDADE_MAX_USOS;
+        const semLim = atividadesSemLimite();          // v13.4
+        const travada = usos >= getAtividadeMaxUsos();
         const bloqueado = travada; // v13.1 — sem mais teto semanal de pontos
         const corUso = travada ? 'var(--red2)' : usos === 1 ? 'var(--gold)' : 'var(--muted)';
         return `
@@ -10808,7 +11009,7 @@ function renderAtividadesContent(){
             <div style="display:flex;align-items:flex-start;gap:8px">
               <div style="font-size:32px;flex:1">${a.emoji || '🎯'}</div>
               <span style="font-size:10px;font-weight:800;color:${corUso};font-family:'Orbitron',monospace;white-space:nowrap"
-                title="Cada atividade pode ser jogada 2x por semana">${usos}/${ATIVIDADE_MAX_USOS}</span>
+                title="${semLim?'O professor liberou: pode repetir à vontade esta semana':'Cada atividade pode ser jogada 2x por semana'}">${semLim?'♾️ livre':`${usos}/${ATIVIDADE_MAX_USOS}`}</span>
               ${trilhaSeloAtividade(a.id)}
             </div>
             <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:900;line-height:1.2">${a.nome}</div>
@@ -10860,7 +11061,7 @@ async function abrirAtividade(id){
 
   // v13 — TRAVA DE 2X POR SEMANA. Primeiro o contador (local ou o que veio
   // do servidor), depois a reserva no servidor, que é quem decide de fato.
-  if(atividadeUsosDe(id) >= ATIVIDADE_MAX_USOS){
+  if(atividadeUsosDe(id) >= getAtividadeMaxUsos()){
     showNotif('🔒 Esta atividade já foi jogada 2 vezes esta semana. Escolha outra!');
     return;
   }
@@ -12416,7 +12617,7 @@ function renderRegrasContent(){
                </div>`;
         })()}
         <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6">
-          Como ganhar quest: sessão do Calvão acima de <strong>1,800</strong> · 5 atividades gamificadas com <strong>85%+</strong> (veja a Trilha abaixo) · ou o professor te dá em sala.
+          Como ganhar quest: sessão do Calvão acima de <strong>${fmtAura(getQuestNotaMinima())}</strong> · 5 atividades gamificadas com <strong>85%+</strong> (veja a Trilha abaixo) · ou o professor te dá em sala.
           <br>Quest de Calvão e de atividade nascem <strong>pendentes</strong> — só viram nível e saldo depois que o professor aprova na fila dele. Quest dada direto em sala já nasce aprovada.
         </div>
       </div>
@@ -13397,7 +13598,7 @@ async function decidirEntrega(op){
 // ══════════════════════════════════════════════════════════════════
 // v13 — PAINEL DE QUESTS (professor): fila de aprovação + histórico
 // As quests que o sistema detecta sozinho (hoje só a do Calvão acima de
-// 1.800) entram aqui como PENDENTES e esperam você decidir. Nada vira
+// da nota mínima) entram aqui como PENDENTES e esperam você decidir. Nada vira
 // ponto do aluno sem passar por este botão.
 // ══════════════════════════════════════════════════════════════════
 let _questPendCount = 0;     // badge do menu lateral
@@ -13453,7 +13654,7 @@ function pintarQuests(){
 
 function questTipoLabel(t){
   return ({
-    'calvao-1800':'🤖 Calvão acima de 1,800',
+    'calvao-1800':'🤖 Calvão com nota alta',
     'atividades-80pct':'🎮 Atividades gamificadas',
     'manual-individual':'🏅 Concedida por você',
     'manual-turma':'🏅 Concedida à turma'
