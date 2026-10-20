@@ -3161,6 +3161,10 @@ function renderProfApp(){
         <div class="tdot" style="background:var(--blue)"></div>
         <span style="font-size:12px">📋 Tarefas SEDUC</span>
       </div>
+      <div class="t-tab" onclick="openNotasProva();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
+        <div class="tdot" style="background:var(--gold)"></div>
+        <span style="font-size:12px">📝 Notas de Prova</span>
+      </div>
       <div class="t-tab" onclick="openLoja();toggleProfSidebarMobile(false)" style="margin:0 8px 4px">
         <div class="tdot" style="background:var(--green)"></div>
         <span style="font-size:12px">🛍️ Loja de Prêmios</span>
@@ -10172,6 +10176,8 @@ function questAlunoOrigem(ev){
   return ({
     'calvao-1800':'🤖 Sessão do Calvão com nota alta',
     'atividades-80pct':'🎮 Atividades gamificadas',
+    'atividades-5x':'🎮 Atividades gamificadas',
+    'prova':'📝 Nota de prova',
     'manual-individual':'🏅 Dada pelo professor',
     'manual-turma':'🏅 Dada para a turma toda'
   })[ev.tipo] || 'Quest';
@@ -13114,6 +13120,331 @@ function stopAdminEvent(){
 // RESET AURA DA TURMA
 // ==============================
 // ══════════════════════════════════════════════════════════════════
+// v13.6 — NOTAS DE PROVA → PONTOS DE QUEST (professor)
+// Lê a planilha no navegador (uma aba por turma, colunas "Nome" e a nota),
+// pede a SIMULAÇÃO ao servidor e só grava quando o professor confirma.
+// Regra: nota 6 ou mais = o mesmo tanto de pontos de quest; 5 ou menos, nada.
+// ══════════════════════════════════════════════════════════════════
+let _np = null;                 // {avaliacoes} já lançadas
+let _npPacote = null;           // planilha lida, ainda não gravada
+let _npRel = null;              // resultado da simulação
+let _npCarregando = false, _npErro = null, _npGravando = false, _npSimulando = false;
+let _npAbertas = {};            // turmas abertas/fechadas na conferência (por posição)
+let _npSugCache = {};           // sugestões de cada linha, pra manter a lista depois de confirmar
+
+function npEsc(s){
+  return String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function openNotasProva(){
+  CTid = null; renderSB();
+  _npPacote = null; _npRel = null; _npAbertas = {}; _npSugCache = {};
+  document.getElementById('main-area').innerHTML = `<div class="tv" id="np-wrap">${renderNotasProvaInner()}</div>`;
+  carregarHistoricoProvas();
+}
+function pintarNotasProva(){
+  const el = document.getElementById('np-wrap');
+  if(el) el.innerHTML = renderNotasProvaInner();
+}
+async function carregarHistoricoProvas(){
+  _npCarregando = true; pintarNotasProva();
+  try{ _np = await apiFetch('/api/db?action=quest-prova-listar', {}); _npErro = null; }
+  catch(e){ _npErro = e.message; }
+  _npCarregando = false; pintarNotasProva();
+}
+
+// Nota numérica de 0 a 10; "7,5" também vale. "S/N", "F", vazio → sem nota.
+function npNota(v){
+  if(typeof v === 'number' && isFinite(v)) return v;
+  if(v == null) return null;
+  const s = String(v).trim().replace(',', '.');
+  return /^\d+(\.\d+)?$/.test(s) ? parseFloat(s) : null;
+}
+function npNorm(v){
+  return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toUpperCase();
+}
+
+// Cada aba é uma turma. Acha a linha do cabeçalho (a que tem "Nome"), usa a
+// primeira coluna com título depois dela como nota, e pula linhas vazias e
+// a "MÉDIA DA TURMA".
+async function lerPlanilhaNotas(buf){
+  const XLSX = await carregarSheetJS();
+  const wb = XLSX.read(buf, {type:'array'});
+  const alunos = []; let titulo = '';
+  for(const aba of wb.SheetNames){
+    const linhas = XLSX.utils.sheet_to_json(wb.Sheets[aba], {header:1, defval:null, raw:true});
+    const iCab = linhas.findIndex(l => (l||[]).some(v => npNorm(v) === 'NOME'));
+    if(iCab < 0) continue;
+    const cab = linhas[iCab];
+    const cNome = cab.findIndex(v => npNorm(v) === 'NOME');
+    let cNota = cab.findIndex((v,i) => i > cNome && v != null && String(v).trim());
+    if(cNota < 0) cNota = cNome + 1;
+    if(!titulo && cab[cNota]) titulo = String(cab[cNota]).trim();
+    for(const l of linhas.slice(iCab+1)){
+      const nome = l && l[cNome] != null ? String(l[cNome]).trim() : '';
+      if(!nome || /^MEDIA/.test(npNorm(nome))) continue;
+      alunos.push({ nome, turma: aba, nota: npNota(l[cNota]) });
+    }
+  }
+  return { alunos, titulo };
+}
+
+function escolherPlanilhaNotas(input){
+  const arq = input.files && input.files[0];
+  input.value = '';
+  if(!arq) return;
+  const leitor = new FileReader();
+  leitor.onload = async () => {
+    try{
+      const { alunos, titulo } = await lerPlanilhaNotas(new Uint8Array(leitor.result));
+      if(!alunos.length) throw new Error('Não achei alunos na planilha. Cada aba precisa de uma coluna "Nome" e uma coluna com a nota.');
+      const hoje = new Date();
+      const nomeAval = `${titulo || 'Prova'} · ${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+      _npPacote = { avaliacao: nomeAval, alunos, arquivo: arq.name, vinculos: {} };
+      _npAbertas = {}; _npSugCache = {};
+      await simularNotasProva();
+    }catch(e){
+      _npPacote = null; _npRel = null;
+      showNotif('⚠️ ' + (e.message || 'Não consegui ler a planilha.'));
+      pintarNotasProva();
+    }
+  };
+  leitor.readAsArrayBuffer(arq);
+}
+
+async function simularNotasProva(manterTela){
+  if(!_npPacote) return;
+  if(!manterTela) _npRel = null;
+  _npSimulando = true; pintarNotasProva();
+  try{
+    const r = await apiFetch('/api/db?action=quest-prova', { pacote:_npPacote });
+    _npRel = r.relatorio;
+    _npRel.linhas.forEach(l => { if(l.sugestoes && l.sugestoes.length) _npSugCache[l.i] = l.sugestoes; });
+  }catch(e){
+    showNotif('⚠️ ' + e.message);
+    if(!manterTela) _npPacote = null;
+  }
+  _npSimulando = false; pintarNotasProva();
+}
+
+// "Este nome da planilha é este aluno do FARME" — escolhido pelo professor.
+function vincularAluno(i, alunoId){
+  if(!_npPacote) return;
+  _npPacote.vinculos = _npPacote.vinculos || {};
+  if(alunoId) _npPacote.vinculos[i] = alunoId; else delete _npPacote.vinculos[i];
+  simularNotasProva(true);
+}
+function aceitarSugestoesFortes(){
+  if(!_npPacote || !_npRel) return;
+  _npPacote.vinculos = _npPacote.vinculos || {};
+  let n = 0;
+  _npRel.linhas.forEach(l => {
+    const s = (l.sugestoes || []).find(x => x.forte);
+    if(s && !l.alunoNome){ _npPacote.vinculos[l.i] = s.id; n++; }
+  });
+  if(n){ showNotif(`🔗 ${n} nome(s) ligado(s) ao aluno do FARME — confira na tabela.`); simularNotasProva(true); }
+}
+function npToggle(g, aberto){ _npAbertas[g] = aberto; }
+
+// O nome identifica a avaliação: subir de novo com o MESMO nome não dá ponto
+// em dobro. Mudou o nome, refaz a conferência (o "já recebeu" muda junto).
+function renomearAvaliacao(v){
+  if(!_npPacote) return;
+  const novo = String(v || '').trim();
+  if(!novo || novo === _npPacote.avaliacao) return;
+  _npPacote.avaliacao = novo.slice(0, 80);
+  simularNotasProva();
+}
+
+async function confirmarNotasProva(){
+  if(!_npPacote || !_npRel || _npGravando) return;
+  _npGravando = true; pintarNotasProva();
+  try{
+    const r = await apiFetch('/api/db?action=quest-prova', { pacote:_npPacote, confirmar:true });
+    showNotif(`🏅 ${r.gravadas} ponto(s) de quest para ${r.alunos} aluno(s) — ${_npPacote.avaliacao}.`);
+    _npPacote = null; _npRel = null;
+    if(typeof carregarQuestSaldos === 'function') carregarQuestSaldos();
+    await carregarHistoricoProvas();
+  }catch(e){
+    showNotif('⚠️ ' + e.message);
+  }finally{ _npGravando = false; pintarNotasProva(); }
+}
+
+const NP_SITUACAO = {
+  'ganha':          ['✅','ganha',              'var(--green2)'],
+  'complemento':    ['➕','ganha a diferença',  'var(--green2)'],
+  'nao-ganha':      ['·', 'nota abaixo de 6',   'var(--muted)'],
+  'sem-nota':       ['📝','sem nota (S/N)',     'var(--muted)'],
+  'ja-recebeu':     ['✔️','já recebeu',          'var(--muted2)'],
+  'nao-encontrado': ['❓','não está no FARME',   'var(--gold)'],
+  'ambiguo':        ['⚠️','nome repetido',       'var(--gold)']
+};
+
+function renderNotasProvaInner(){
+  const cab = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
+      <div>
+        <div style="font-family:'Fredoka',sans-serif;font-size:24px;font-weight:700">📝 Notas de Prova</div>
+        <div style="font-size:12.5px;color:var(--muted2);margin-top:2px">Nota 6 ou mais vira o mesmo tanto de pontos de quest. Nota 5 ou menos não ganha.</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="baixarListaAlunos()" title="Lista de alunos do FARME, pra conferir se os nomes batem com os da planilha">📄 Baixar lista de alunos</button>
+      </div>
+    </div>`;
+  const enviar = `
+    <div class="card" style="margin:14px 0;border-color:rgba(240,180,41,.45)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:22px">📥</span>
+        <strong style="font-size:15px;flex:1">Carregar planilha de notas</strong>
+        <label class="btn btn-sm" style="border-color:var(--gold);color:var(--gold);font-weight:700;cursor:pointer;margin:0">
+          Escolher planilha .xlsx
+          <input type="file" id="np-arquivo" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="escolherPlanilhaNotas(this)" style="display:none">
+        </label>
+      </div>
+      <div style="font-size:12px;color:var(--muted2);line-height:1.6">
+        Uma aba por turma, com a coluna <strong>Nome</strong> e a coluna da nota (de 0 a 10).
+        "S/N" e linhas como "MÉDIA DA TURMA" são ignoradas. Nada é gravado direto:
+        primeiro aparece a conferência, aluno por aluno.
+      </div>
+    </div>`;
+  return cab + enviar + renderNotasPreview() + renderNotasHistorico();
+}
+
+function renderNotasPreview(){
+  if(!_npPacote) return '';
+  if(!_npRel) return `<div class="empty">Conferindo ${_npPacote.alunos.length} nomes com os alunos do FARME...</div>`;
+  const r = _npRel.resumo, linhas = _npRel.linhas;
+  const semPar = x => !x.alunoNome && (x.situacao === 'nao-encontrado' || x.situacao === 'ambiguo');
+  const perdem = linhas.filter(x => semPar(x) && x.pontos > 0 && !(x.sugestoes||[]).length).length;  // perderiam pontos
+  const foraSemEfeito = linhas.filter(x => semPar(x) && !(x.pontos > 0)).length;                      // não muda nada
+  const problema = perdem || r.comSugestao;
+  const chip = (txt, n, cor) => !n ? '' :
+    `<span class="pill" style="background:${cor}1f;color:${cor};font-weight:800">${txt} ${n}</span>`;
+
+  // agrupa por aba/turma, na ordem do arquivo
+  const grupos = [];
+  linhas.forEach(l => {
+    let g = grupos.find(x => x.turma === l.turma);
+    if(!g){ g = { turma: l.turma, itens: [] }; grupos.push(g); }
+    g.itens.push(l);
+  });
+
+  const vinc = _npPacote.vinculos || {};
+  // a lista de "quem é quem": aparece pra quem não casou sozinho e tem
+  // nome parecido no FARME, e continua aparecendo depois de escolhido
+  // (pra dar pra desfazer).
+  const seletor = x => {
+    const sug = (x.sugestoes && x.sugestoes.length) ? x.sugestoes : (_npSugCache[x.i] || []);
+    if(!sug.length || (x.alunoNome && !x.vinculado)) return '';
+    const atual = vinc[x.i] || '';
+    return `<select id="np-vinc-${x.i}" onchange="vincularAluno(${x.i}, this.value)" ${_npSimulando?'disabled':''}
+        style="margin-top:4px;max-width:100%;padding:4px 6px;background:var(--bg2);border:1px solid ${atual?'var(--green2)':'var(--gold)'};border-radius:6px;color:var(--text);font-size:11.5px">
+        <option value="">${atual?'— desfazer: não é este aluno —':'— escolha quem é no FARME —'}</option>
+        ${sug.map(s => `<option value="${npEsc(s.id)}" ${s.id===atual?'selected':''}>${npEsc(s.nome)} · ${npEsc(s.turma)}${s.forte?' (sugestão forte)':''}</option>`).join('')}
+      </select>`;
+  };
+
+  const tabela = (g, gi) => {
+    const ganham = g.itens.filter(x => x.faltam > 0);
+    const pts = ganham.reduce((s,x) => s + x.faltam, 0);
+    const alerta = g.itens.some(x => semPar(x) && x.pontos > 0);
+    const aberta = gi in _npAbertas ? _npAbertas[gi] : alerta;
+    return `
+      <details ${aberta?'open':''} ontoggle="npToggle(${gi}, this.open)" style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg3)">
+        <summary style="cursor:pointer;padding:10px 12px;font-size:13px;font-weight:700;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="flex:1">${npEsc(g.turma)}</span>
+          <span style="color:var(--green2)">${ganham.length} ganham · ${pts} pts</span>
+          ${alerta?`<span style="color:var(--gold)">⚠️ conferir nomes</span>`:''}
+        </summary>
+        <div style="overflow-x:auto;padding:0 10px 10px">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="color:var(--muted);text-align:left">
+              <th style="padding:6px 4px;font-weight:700">Nome na planilha</th>
+              <th style="padding:6px 4px;font-weight:700;text-align:center">Nota</th>
+              <th style="padding:6px 4px;font-weight:700;text-align:center">Quest</th>
+              <th style="padding:6px 4px;font-weight:700">Situação</th>
+            </tr></thead>
+            <tbody>${g.itens.map(x => {
+              let [ic, txt, cor] = NP_SITUACAO[x.situacao] || ['', x.situacao, 'var(--muted)'];
+              const temSug = !x.alunoNome && ((x.sugestoes||[]).length);
+              if(temSug){ ic = '💡'; txt = x.situacao==='ambiguo' ? 'nome repetido — escolha' : 'parecido no FARME — escolha'; cor = 'var(--gold)'; }
+              else if(semPar(x) && !(x.pontos > 0)){ cor = 'var(--muted)'; txt += ' — não muda nada (não ganharia)'; }
+              const outroNome = x.alunoNome && npNorm(x.alunoNome) !== npNorm(x.nome)
+                ? `<div style="font-size:10.5px;color:var(--muted)">no FARME: ${npEsc(x.alunoNome)}${x.turmaFarme?` · ${npEsc(x.turmaFarme)}`:''}</div>` : '';
+              return `<tr style="border-top:1px solid var(--border)">
+                <td style="padding:6px 4px">${npEsc(x.nome)}${outroNome}</td>
+                <td style="padding:6px 4px;text-align:center;font-variant-numeric:tabular-nums">${x.nota===null?'—':x.nota}</td>
+                <td style="padding:6px 4px;text-align:center;font-weight:800;color:${x.faltam>0?'var(--green2)':'var(--muted)'};font-variant-numeric:tabular-nums">${x.faltam>0?'+'+x.faltam:'—'}</td>
+                <td style="padding:6px 4px;color:${cor}">${ic} ${txt}${x.situacao==='complemento'?` (já tinha ${x.jaRecebeu})`:''}${x.vinculado?' <span style="color:var(--green2)">· 🔗 confirmado por você</span>':''}${seletor(x)}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>
+      </details>`;
+  };
+
+  return `
+    <div class="card" style="margin-bottom:16px;border-color:${problema?'rgba(240,180,41,.5)':'rgba(74,222,128,.5)'}">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:22px">${problema?'⚠️':'✅'}</span>
+        <strong style="font-size:15px;flex:1">Conferência — ${npEsc(_npPacote.arquivo || 'planilha')}</strong>
+        <span class="pill" style="background:rgba(74,222,128,.16);color:var(--green2);font-weight:800">${r.ganham} aluno(s) · ${r.pontos} ponto(s) de quest</span>
+      </div>
+      <label for="np-avaliacao" style="display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px">Nome da avaliação</label>
+      <input id="np-avaliacao" value="${npEsc(_npPacote.avaliacao)}" onchange="renomearAvaliacao(this.value)"
+        style="width:100%;max-width:420px;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:13.5px;font-weight:700">
+      <div style="font-size:11px;color:var(--muted2);margin-top:5px;line-height:1.5">
+        É o nome que identifica esta prova: subir a planilha de novo com o mesmo nome não dá ponto em dobro.
+        Uma prova nova precisa de um nome novo.
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">
+        ${chip('✅ ganham', r.ganham - r.complementos, '#4ade80')}
+        ${chip('➕ ganham a diferença', r.complementos, '#4ade80')}
+        ${chip('· nota abaixo de 6', r.naoGanham, '#8a97b0')}
+        ${chip('📝 sem nota', r.semNota, '#8a97b0')}
+        ${chip('✔️ já receberam', r.jaReceberam, '#8a97b0')}
+        ${chip('💡 parecidos — escolher', r.comSugestao, '#f0b429')}
+        ${chip('❓ perderiam pontos — não estão no FARME', perdem, '#f0b429')}
+        ${chip('❓ não estão no FARME (nota abaixo de 6 ou S/N)', foraSemEfeito, '#8a97b0')}
+      </div>
+      ${perdem?`<div style="margin-top:10px;padding:10px 12px;background:#f0b4291a;border:1px solid #f0b42955;border-radius:var(--r);font-size:11.5px;color:var(--muted2);line-height:1.6">
+        <strong style="color:var(--gold)">${perdem} aluno(s) que ganhariam pontos não estão no FARME</strong> e não têm nenhum nome parecido por lá — ficam sem os pontos agora.
+        Dá pra conferir com o <strong>📄 Baixar lista de alunos</strong>, corrigir o nome e subir a planilha de novo: quem já recebeu não ganha em dobro.</div>`:''}
+      ${r.comSugestao?`<div style="margin-top:10px;padding:10px 12px;background:rgba(240,180,41,.1);border:1px solid rgba(240,180,41,.45);border-radius:var(--r);font-size:12px;line-height:1.6">
+        <strong style="color:var(--gold)">💡 ${r.comSugestao} nome(s) parecido(s) com alunos do FARME.</strong>
+        Às vezes o FARME tem só parte do nome, ou uma letra trocada. Na tabela, cada um tem uma lista pra você dizer quem é quem — nada é ligado sem você escolher.
+        ${r.fortes?`<div style="margin-top:8px"><button class="btn btn-sm" onclick="aceitarSugestoesFortes()" ${_npSimulando?'disabled':''} style="border-color:var(--gold);color:var(--gold);font-weight:700">🔗 Aceitar as ${r.fortes} sugestões fortes</button>
+        <span style="font-size:11px;color:var(--muted2);margin-left:6px">forte = o nome inteiro está dentro do outro, na mesma turma</span></div>`:''}
+      </div>`:''}
+      ${r.vinculados?`<div style="margin-top:8px;font-size:12px;color:var(--green2)">🔗 ${r.vinculados} nome(s) ligado(s) por você.</div>`:''}
+      ${_npSimulando?`<div style="margin-top:8px;font-size:12px;color:var(--muted2)">Atualizando a conferência...</div>`:''}
+      ${grupos.map((g,gi) => tabela(g,gi)).join('')}
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="_npPacote=null;_npRel=null;pintarNotasProva()">Cancelar</button>
+        <button class="btn btn-p btn-sm" onclick="confirmarNotasProva()" ${(_npGravando||_npSimulando||!r.pontos)?'disabled':''}>
+          ${_npGravando ? 'Lançando...' : r.pontos ? `✅ Confirmar e dar ${r.pontos} ponto(s) de quest` : 'Nada novo para lançar'}</button>
+      </div>
+    </div>`;
+}
+
+function renderNotasHistorico(){
+  if(_npCarregando && !_np) return `<div class="empty">Carregando...</div>`;
+  if(_npErro && !_np) return `<div class="card" style="border-color:rgba(229,62,62,.4);font-size:13px;color:var(--red2)">⚠️ ${npEsc(_npErro)}</div>`;
+  const lista = (_np && _np.avaliacoes) || [];
+  if(!lista.length) return `<div class="empty">Nenhuma prova lançada ainda.</div>`;
+  return `
+    <div style="font-size:12px;font-weight:800;letter-spacing:.6px;color:var(--muted);text-transform:uppercase;margin:18px 0 8px">Provas já lançadas</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+      ${lista.map(a => `
+        <div class="card" style="padding:12px 14px">
+          <div style="font-weight:800;font-size:13.5px">${npEsc(a.avaliacao)}</div>
+          <div style="font-size:12px;color:var(--muted2);margin-top:4px">${a.alunos} aluno(s) · <strong style="color:var(--green2)">${a.pontos}</strong> ponto(s) de quest</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${new Date(a.quando).toLocaleDateString('pt-BR')}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
 // v13 — TAREFAS DA SEDUC (professor)
 // O FARME não faz conta: o arquivo .json já vem pronto do processador
 // (pasta TAREFAS-SEDUC). Aqui a gente confere os nomes e grava.
@@ -13656,6 +13987,8 @@ function questTipoLabel(t){
   return ({
     'calvao-1800':'🤖 Calvão com nota alta',
     'atividades-80pct':'🎮 Atividades gamificadas',
+    'atividades-5x':'🎮 Atividades gamificadas',
+    'prova':'📝 Nota de prova',
     'manual-individual':'🏅 Concedida por você',
     'manual-turma':'🏅 Concedida à turma'
   })[t] || t;
